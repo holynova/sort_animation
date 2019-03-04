@@ -10,8 +10,38 @@
 
 <body>
   <div class="wrapper">
-    <h1>Hello world</h1>
-    <p>脚手架创建成功</p>
+    <h2>排序算法可视化</h2>
+    <div class="setting">
+      排序算法
+      <select name="sort-func" id="select-sort">
+        <option value="bubbleSort">冒泡排序</option>
+        <option value="quickSort" selected="true">快速排序</option>
+        <option value="mergeSort">归并排序</option>
+        <option value="heapSort">堆排序</option>
+        <option value="insertSort">插入排序</option>
+        <option value="selectSort">简单选择排序</option>
+        <option value="cocktailSort">鸡尾酒排序</option>
+      </select>
+      <label>
+        样本数量
+        <input type="number" value="100" id="sample-num" min="2" max="500" step="1">
+      </label>
+      <label>动画间隔
+        <input type="number" name="" id="interval" value="100" max='9999' step='10'>ms
+      </label>
+      <!-- <br> -->
+    </div>
+    <div class="btns" id='btn-panel'>
+      <!-- <input type="button" value="重置数据" id='btn-renew-data'> -->
+      <input type="button" value="开始动画" id='btn-go'>
+      <input type="button" value="暂停动画" id='btn-pause'>
+      <input type="button" value="下一步" id='btn-next'>
+      <input type="button" value="上一步" id='btn-prev'>
+      <input type="button" value="第一步" id='btn-first'>
+      <input type="button" value="最后一步" id='btn-last'>
+    </div>
+    <h3 id='cur-frame'></h3>
+    <canvas width="600" height="300" id='my-canvas'></canvas>
   </div>
 </body>
 
