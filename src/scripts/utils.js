@@ -14,21 +14,27 @@ const rand = {
 };
 
 
-function testSort(func1, cnt = 100, timeLimit = 3000) {
-  const start = Date.now();
+function testSort(name = 'foo', func1, cnt = 100, timeLimit = 3000) {
+  const start = new Date().getTime();
   const func2 = arr => arr.sort((a, b) => a - b);
   // const cnt = 100;
   let pass = 0;
+  let total = 0;
   for (let i = 0; i < cnt; i++) {
-    const testCase = rand.list(999, 0, 9999);
+    total++;
+    const testCase = rand.list(9999, 0, 9999);
     const r1 = JSON.stringify(func1([...testCase]));
     const r2 = JSON.stringify(func2([...testCase]));
     if (r1 === r2) {
       pass++;
     }
+    const now = Date.now();
+    if (now - start > timeLimit) {
+      break;
+    }
   }
-  log(`${pass}/${cnt} = ${pass / cnt * 100}% cases pass`);
-  return pass === cnt;
+  log(`${name}:${pass}/${total} = ${pass / total * 100}% cases pass`);
+  return pass === total;
 }
 
 

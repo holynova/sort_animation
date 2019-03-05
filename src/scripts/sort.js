@@ -54,7 +54,7 @@ function test() {
   const s = new Sorter();
   // const arr = [3, 7, 5, 5, 4, 2, 6, 1, 3];
   // log(s.bubble(arr));
-  testSort(s.bubble);
+  testSort('bubble', s.bubble);
 }
 
 
