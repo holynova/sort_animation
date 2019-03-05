@@ -11,10 +11,11 @@ const rand = {
     }
     return arr;
   },
+  shuffle: (arr) => { },
 };
 
 
-function testSort(name = 'foo', func1, cnt = 100, timeLimit = 3000) {
+function testSort(name = 'foo', func1, cnt = 100, timeLimit = 1000) {
   const start = new Date().getTime();
   const func2 = arr => arr.sort((a, b) => a - b);
   // const cnt = 100;

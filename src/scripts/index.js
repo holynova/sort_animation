@@ -1,6 +1,7 @@
 // import '../styles/normalize.scss';
 import '../styles/style.scss';
 import './sort';
+import './test';
 
 window.onload = function () {
   function RandClass() {
