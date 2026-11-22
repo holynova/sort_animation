@@ -1,5 +1,7 @@
 # Sort Lab
 
+[Try it live](https://sort-animation.xiaosang.cc/) · [GitHub](https://github.com/holynova/sort_animation)
+
 [中文](README.md)
 
 Step through seven sorting algorithms with a monochrome 3D dot plot. The first example opens paused on bubble sort comparing 8 with 3. Advance once to see the two values trade places.
@@ -18,3 +20,8 @@ Step through seven sorting algorithms with a monochrome 3D dot plot. The first e
 With Node.js 20 or later, run `npm ci`, `npm test` and `npm run build`. Open `dist/index.html` directly for offline use. For development, run `npm start` and open the address printed in the terminal.
 
 The renderer projects 3D samples onto a canvas. The sorting engine records comparisons and mutations, with an array checkpoint every 256 operations for seeking.
+
+
+Cloudflare Pages builds the `master` branch with `npm run build` after `git push origin master`.
+
+<a href="https://sort-animation.xiaosang.cc/"><img src="assets/qr.png" width="112" alt="Scan to open on mobile"></a>

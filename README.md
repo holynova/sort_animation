@@ -1,5 +1,7 @@
 # 排序观察室 · Sort Lab
 
+[在线体验](https://sort-animation.xiaosang.cc/) · [GitHub](https://github.com/holynova/sort_animation)
+
 [English](README.en.md)
 
 在同一组数字上逐步观察冒泡、快速、归并、插入、选择、堆和鸡尾酒排序。打开时停在冒泡排序的第一次比较。下标 0 和 1 的值分别是 8 和 3，点击「下一步」即可观察它们交换位置。
@@ -24,3 +26,8 @@ npm run build
 ```
 
 双击 `dist/index.html` 即可离线使用。开发时运行 `npm start`，打开终端打印的地址。Canvas 将三维点阵投影到二维画布，每 256 次操作保存一次数组检查点以支持回放。
+
+
+推送主分支（`git push origin master`）后，Cloudflare Pages 运行 `npm run build`，发布 `dist/`。
+
+<a href="https://sort-animation.xiaosang.cc/"><img src="assets/qr.png" width="112" alt="扫码在手机打开"></a>
