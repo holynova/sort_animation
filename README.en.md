@@ -1,23 +1,20 @@
-# Sort Effect
+# Sort Lab
 
 [中文](README.md)
 
-A browser instrument that turns seven sorting algorithms into audiovisual performances. Element values determine pitch and column height. Comparisons light up the active columns, writes strike branching arcs and shake the stage. Settled bands burst into glass fragments, then reform. The final sweep resolves into an ascending arpeggio. Press X or use the lightning button to trigger a shockwave at the active column.
+Step through seven sorting algorithms with a monochrome 3D dot plot. The first example opens paused on bubble sort comparing 8 with 3. Advance once to see the two values trade places.
 
-![Aurora Pulse, transport controls and the sound world library](assets/readme/screenshot-sorting.png)
+![The first comparison with projected dots, operands, pseudocode and the array](assets/readme/screenshot-sorting.png)
 
-| World | Sound and motion | Tempo |
-| --- | --- | --- |
-| Aurora Pulse | Glass synths, prismatic columns and stardust curtains | 108 BPM |
-| Abyssal Echo | Bell overtones, long echoes, bubbles and ripples | 82 BPM |
-| Solar Flare | Triangle plucks, punchy percussion and ember trails | 132 BPM |
+## Reading the display
 
-Play quick, merge, heap, bubble, insertion, selection or cocktail sort with 2–500 samples. Switch worlds mid-performance to keep the same data and position. Scrub, step or jump to inspect individual operations. Continuous playback advances to the next world with a fresh shuffle.
-
-Space plays or pauses. Left and Right step through operations. Home and End jump to the endpoints. R shuffles, M toggles sound and F toggles immersive mode. The keyboard panel includes a reduced-motion control.
+- Height encodes value. White marks the active elements. Drag horizontally to rotate, switch to the front view for a shared baseline, or select an index to inspect it.
+- Each operation has a numerical explanation, its operands and the active line of pseudocode. Quicksort labels the pivot P. Merge sort explicitly shows buffer B in the merging interval when reading it. The array snapshot always shows working array A. A swap counts as two writes.
+- Use Left and Right to step, Space to play or pause, and Home or End to jump. Scrub to any recorded operation. Reduced-motion preferences disable movement between steps.
+- Compare bubble, quick, merge, insertion, selection, heap and cocktail shaker sort on the same input of 2–500 elements.
 
 ## Run locally
 
-With Node.js 20 or later, run `npm ci` and `npm start`, then open the address printed by the server. Run `npm test` to verify ordering and scrubbing. Run `npm run build` to generate `dist/`. Open `dist/index.html` directly for offline playback, or serve the directory from a static host.
+With Node.js 20 or later, run `npm ci`, `npm test` and `npm run build`. Open `dist/index.html` directly for offline use. For development, run `npm start` and open the address printed in the terminal.
 
-The renderer uses Canvas 2D, bundled scene art and Web Audio synthesis. The timeline stores operations and periodic checkpoints so individual steps remain accessible with large arrays.
+The renderer projects 3D samples onto a canvas. The sorting engine records comparisons and mutations, with an array checkpoint every 256 operations for seeking.

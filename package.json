@@ -1,8 +1,8 @@
 {
   "name": "sort-effect",
-  "version": "2.1.0",
+  "version": "3.0.0-beta.1",
   "private": true,
-  "description": "An audiovisual sorting instrument",
+  "description": "A monochrome, step-by-step sorting algorithm visualizer",
   "type": "module",
   "scripts": {
     "start": "node scripts/build.mjs --serve",

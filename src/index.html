@@ -1,77 +1,157 @@
 <!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b0b10">
-  <meta name="description" content="用极光、深海与日冕，听见七种排序算法的节奏。">
-  <title>Sort Effect · 排序共振</title>
-  <link rel="icon" href="./images/mark.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles/style.css">
-  <script defer src="./app.js"></script>
-</head>
-<body>
-  <header class="topbar">
-    <div class="wrap header-inner">
-      <div class="brand"><img src="./images/mark.svg" alt="" width="34" height="34"><span>SORT <b>EFFECT</b></span></div>
-      <span class="brand-sub">排序共振</span>
-      <div class="header-actions">
-        <button id="audio" aria-pressed="true" title="切换声音 (M)"><i data-icon="volume"></i><span>声音开启</span></button>
-        <span class="divider"></span>
-        <button class="icon-button" id="help" title="操作指南" aria-label="操作指南"><i data-icon="keyboard"></i></button>
-        <a class="icon-button" href="https://github.com/holynova/sort_animation" target="_blank" rel="noopener" title="GitHub 源码" aria-label="GitHub 源码"><i data-icon="github"></i></a>
-      </div>
-    </div>
-  </header>
-  <main class="wrap">
-    <section class="instrument" id="instrument" aria-label="排序视听舞台">
-      <div class="stage" id="stage">
-        <div class="camera" id="camera">
-          <div class="backdrop" id="backdrop"></div>
-          <div class="shade"></div>
-          <canvas id="visual" aria-label="排序柱状图，柱高表示数值，发光柱表示当前操作"></canvas>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#f5f5f5" />
+    <meta
+      name="description"
+      content="通过灰阶三维点阵、数组快照和逐行伪代码，观察七种排序算法的每一步。"
+    />
+    <title>排序观察室 · Sort Lab</title>
+    <link rel="icon" href="./images/mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles/style.css" />
+    <script defer src="./app.js"></script>
+  </head>
+  <body>
+    <header class="header">
+      <div class="wrap mast">
+        <div class="brand"><img src="./images/mark.svg" alt="" />SORT LAB</div>
+        <span class="brand-cn">排序观察室</span>
+        <div class="links">
+          <button id="help" title="键盘快捷键" aria-label="键盘快捷键">
+            <i data-icon="keyboard"></i><span>快捷键</span></button
+          ><a
+            href="https://github.com/holynova/sort_animation/tree/feat/monochrome-sort-study"
+            target="_blank"
+            rel="noopener"
+            aria-label="GitHub 源码"
+            ><i data-icon="github"></i><span>源码</span></a
+          >
         </div>
-        <div class="stage-top">
-          <div class="scene-heading">
-            <div class="eyebrow"><span class="scene-line"></span><span id="scene-number">SCENE 01</span><span class="scene-split">/</span>03</div>
-            <h1 id="scene-name">极光脉冲</h1><p id="scene-english">Aurora Pulse</p>
+      </div>
+    </header>
+    <main class="wrap">
+      <nav id="algorithms" aria-label="选择排序算法"></nav>
+      <section class="intro">
+        <div>
+          <div class="title-line">
+            <h1 id="title">冒泡排序</h1>
+            <span id="english" lang="en">Bubble sort</span>
           </div>
-          <div class="stage-tools"><div class="status" role="status"><span class="status-dot"></span><span id="status">就绪</span></div><button id="burst" class="burst" title="引爆共振 (X)" aria-label="引爆共振"><i data-icon="bolt"></i><span>引爆</span></button><button class="immersive icon-button" id="immersive" title="沉浸模式 (F)" aria-label="进入沉浸模式"><i data-icon="expand"></i></button></div>
+          <p id="summary">从左向右比较相邻元素，每一趟把当前最大值送到右端。</p>
         </div>
-        <div class="stage-hud">
-          <div class="readouts"><span>比较 <b id="compares">0000</b></span><span>写入 <b id="writes">0000</b></span></div>
-          <span class="bpm"><i data-icon="wave"></i><b id="stage-bpm">108</b> BPM</span>
+        <div class="inputs">
+          <label for="samples"
+            >样本数 <input type="number" id="samples" min="2" max="500" step="1" value="12" /></label
+          ><button id="shuffle" class="outline"><i data-icon="shuffle"></i>打乱数组</button>
         </div>
-      </div>
-      <div class="transport">
-        <div class="timeline-row"><span class="progress-label"><i data-icon="timeline"></i>演出进度</span><input id="timeline" type="range" min="0" value="0" max="1" aria-label="演出进度"><output for="timeline" id="progress-count">0 / 0</output></div>
-        <div class="desk">
-          <div class="playback">
-            <button class="play-button" id="play"><i data-icon="play"></i><span>开始演出</span></button>
-            <div class="step-buttons">
-              <button class="icon-button" id="first" title="第一步 (Home)" aria-label="第一步"><i data-icon="first"></i></button>
-              <button class="icon-button" id="prev" title="上一步 (←)" aria-label="上一步"><i data-icon="previous"></i></button>
-              <button class="icon-button" id="next" title="下一步 (→)" aria-label="下一步"><i data-icon="next"></i></button>
-              <button class="icon-button" id="last" title="最后一步 (End)" aria-label="最后一步"><i data-icon="last"></i></button>
+      </section>
+      <div class="board">
+        <section class="viewer" aria-label="数组可视化与回放">
+          <div class="graph">
+            <div class="graph-head">
+              <span class="graph-title"
+                ><i data-icon="cube"></i><span id="graph-name">三维点阵</span></span
+              >
+              <div class="angle" aria-label="图表视角">
+                <button data-view="3d" aria-pressed="true">立体</button
+                ><button data-view="front" aria-pressed="false">正视</button>
+              </div>
             </div>
-            <span class="divider"></span><button id="shuffle" class="shuffle icon-button" title="重新打乱 (R)" aria-label="重新打乱"><i data-icon="shuffle"></i></button>
+            <div class="plot">
+              <canvas id="plot" aria-label="排序点阵柱状图，柱高为数值，横轴为从零开始的下标。"></canvas>
+            </div>
+            <div class="plot-foot">
+              <span class="legend"><i class="dot active"></i>当前操作<i class="dot"></i>其余元素</span
+              ><span id="plot-source">工作数组 A</span>
+            </div>
           </div>
-          <div class="settings">
-            <label for="algorithm">排序算法<span class="control select-wrap"><i data-icon="algorithm"></i><select id="algorithm">
-              <option value="quick">快速排序</option><option value="merge">归并排序</option><option value="heap">堆排序</option><option value="bubble">冒泡排序</option><option value="insertion">插入排序</option><option value="selection">选择排序</option><option value="cocktail">鸡尾酒排序</option></select><i data-icon="down"></i></span></label>
-            <label for="samples">样本数量<span class="control sample-wrap"><i data-icon="bars"></i><input value="64" min="2" max="500" type="number" id="samples" inputmode="numeric"></span></label>
-            <label for="speed">播放速度<span class="control select-wrap"><i data-icon="speed"></i><select id="speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1.0×</option><option value="2">2.0×</option><option value="4">4.0×</option><option value="8">8.0×</option></select><i data-icon="down"></i></span></label>
+          <div class="transport">
+            <div class="scrubber">
+              <label for="timeline">步骤</label
+              ><input type="range" id="timeline" min="0" max="1" value="1" /><output
+                for="timeline"
+                id="progress"
+                >1 / 1</output
+              >
+            </div>
+            <div class="controls">
+              <button id="play" class="primary"><i data-icon="play"></i><span>播放</span></button>
+              <button id="first" class="icon-btn" aria-label="跳到初始数组" title="初始数组 (Home)">
+                <i data-icon="first"></i>
+              </button>
+              <button id="prev" class="step" title="上一步 (←)">
+                <i data-icon="previous"></i>上一步
+              </button>
+              <button id="next" class="step" title="下一步 (→)">下一步<i data-icon="next"></i></button>
+              <button id="last" class="icon-btn" aria-label="跳到排序完成" title="排序完成 (End)">
+                <i data-icon="last"></i>
+              </button>
+              <label class="rate"
+                >速度
+                <select id="speed">
+                  <option value="0.5">0.5×</option>
+                  <option value="1" selected>1×</option>
+                  <option value="2">2×</option>
+                  <option value="4">4×</option>
+                </select></label
+              >
+            </div>
+          </div>
+        </section>
+        <aside class="inspector" aria-label="步骤解析">
+          <div class="inspect-top">
+            <h2>步骤解析</h2>
+            <span id="step-no"></span>
+          </div>
+          <div class="step-info">
+            <div class="phase"><span id="action">比较</span><span id="phase"></span></div>
+            <div id="formula"></div>
+            <p id="note"></p>
+            <div id="operands"></div>
+          </div>
+          <div class="source">
+            <h3><i data-icon="code"></i>伪代码</h3>
+            <ol id="pseudo"></ol>
+          </div>
+        </aside>
+      </div>
+      <section class="snapshot" aria-labelledby="array-title">
+        <div class="array-head">
+          <h2 id="array-title">数组快照 <span>A</span></h2>
+          <div class="metrics">
+            <span>比较 <b id="compares">0</b> 次</span><span>写入 <b id="writes">0</b> 次</span>
           </div>
         </div>
-      </div>
-    </section>
-    <section class="library" aria-labelledby="library-title">
-      <div class="section-heading"><div class="section-title"><i data-icon="layers"></i><h2 id="library-title">场景库</h2><span>SOUND WORLDS</span></div><label class="continuous" title="一场结束后自动进入下一个场景"><input type="checkbox" id="continuous"><span class="switch"></span>连续演出</label></div>
-      <div class="world-grid" id="world-list"></div>
-    </section>
-  </main>
-  <dialog id="guide"><form method="dialog"><div class="dialog-head"><h2>操作指南</h2><button class="icon-button" aria-label="关闭"><i data-icon="close"></i></button></div>
-    <p>柱高表示数值。亮白柱正在比较，交换触发电弧与震屏，归位的一组柱子会碎裂再聚合。按 X 或点击「引爆」可在当前位置打出共振冲击波。拖动进度条可以回看任意一步。</p>
-    <dl><div><dt>播放 / 暂停</dt><dd><kbd>Space</kbd></dd></div><div><dt>逐步回放</dt><dd><kbd>←</kbd> <kbd>→</kbd></dd></div><div><dt>跳至首尾</dt><dd><kbd>Home</kbd> <kbd>End</kbd></dd></div><div><dt>打乱 / 声音 / 沉浸模式</dt><dd><kbd>R</kbd> <kbd>M</kbd> <kbd>F</kbd></dd></div></dl>
-    <label class="reduced"><input type="checkbox" id="reduced"> 减弱动态效果</label>
-  </form></dialog>
-</body></html>
+        <div class="array-scroll" tabindex="0" aria-label="当前工作数组，按下标从左到右排列">
+          <div id="cells"></div>
+        </div>
+      </section>
+      <footer><span id="facts"></span><span>下标从 0 开始</span></footer>
+    </main>
+    <dialog id="dialog">
+      <form method="dialog">
+        <div class="dialog-head">
+          <h2>快捷键</h2>
+          <button class="icon-btn" aria-label="关闭"><i data-icon="close"></i></button>
+        </div>
+        <dl>
+          <div>
+            <dt>播放或暂停</dt>
+            <dd><kbd>Space</kbd></dd>
+          </div>
+          <div>
+            <dt>上一步 / 下一步</dt>
+            <dd><kbd>←</kbd> <kbd>→</kbd></dd>
+          </div>
+          <div>
+            <dt>初始数组 / 排序完成</dt>
+            <dd><kbd>Home</kbd> <kbd>End</kbd></dd>
+          </div>
+        </dl>
+        <p>立体视图可左右拖动调整角度。点选柱子或数组格可查看下标和值。</p>
+      </form>
+    </dialog>
+  </body>
+</html>

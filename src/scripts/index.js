@@ -1,252 +1,313 @@
-import { buildScore } from './sort.js';
-import { worlds } from './worlds.js';
-import { iconsIn, icon } from './icons.js';
-import { Stage } from './stage.js';
-import { Soundtrack } from './audio.js';
+import { algorithms, buildScore } from './sort.js';
+import { chartValues, explain, lessons } from './lesson.js';
+import { ParticlePlot } from './stage.js';
+import { icon, iconsIn } from './icons.js';
 
-const $ = id => document.getElementById(id);
-const reducedMedia = window.matchMedia('(prefers-reduced-motion: reduce)');
-const guide = $('guide');
-const stage = new Stage($('visual'), worlds[0], reducedMedia.matches);
-const audio = new Soundtrack(worlds[0]);
-let worldIndex = 0, score, sample, max;
-let playing = false, endAt = 0, previousTime = 0, fractionalSteps = 0;
-let beatPhase = 0, lastTick = -1, lastDraw = -10000, drawNeeded = true;
-let resumeOnVisibility = false;
-let visible = true;
-function generate(n) {
-  const values = Array.from({length:n}, (_, i) => i + 1);
+const byId = (id) => document.getElementById(id);
+const el = (tag, text) => {
+  const node = document.createElement(tag);
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+iconsIn(document);
+let input = [8, 3, 11, 5, 1, 9, 4, 12, 2, 7, 10, 6];
+let algorithm = 'bubble',
+  score,
+  running = false,
+  timer,
+  hovered = null;
+const nodes = {};
+for (const id of [
+  'play',
+  'first',
+  'prev',
+  'next',
+  'last',
+  'timeline',
+  'progress',
+  'action',
+  'phase',
+  'formula',
+  'note',
+  'operands',
+  'step-no',
+  'cells',
+  'compares',
+  'writes',
+  'pseudo',
+  'plot-source',
+  'samples',
+  'speed',
+  'dialog',
+])
+  nodes[id] = byId(id);
+
+const plot = new ParticlePlot(byId('plot'), selectIndex, (index) => {
+  hovered = index;
+  updatePlotSource();
+});
+
+function viewingBuffer() {
+  return algorithm === 'merge' && score.state.event?.kind === 'compare';
+}
+
+function updatePlotSource() {
+  if (!score) return;
+  const index = hovered ?? plot.picked,
+    scope = score.state.event?.scope;
+  const buffered = viewingBuffer();
+  let text = buffered ? '区间 [' + scope.lo + '…' + scope.hi + '] 显示缓冲 B' : '工作数组 A';
+  if (index !== null) {
+    const inBuffer = buffered && index >= scope.lo && index <= scope.hi;
+    const name = inBuffer ? 'B' : 'A';
+    const value = inBuffer ? scope.buffer[index - scope.lo] : score.state.data[index];
+    text += ' · ' + name + '[' + index + '] = ' + value;
+  }
+  nodes['plot-source'].textContent = text;
+}
+function selectIndex(index) {
+  plot.picked = plot.picked === index ? null : index;
+  updateCells();
+  updatePlotSource();
+  plot.draw(performance.now());
+}
+function updateCells() {
+  const { data, event } = score.state;
+  const cells = nodes.cells;
+  if (cells.children.length !== data.length) {
+    const fragment = document.createDocumentFragment();
+    for (let i = 0; i < data.length; i++) {
+      const cell = el('button');
+      cell.type = 'button';
+      cell.dataset.index = i;
+      cell.append(el('small', i), el('b'));
+      fragment.append(cell);
+    }
+    cells.replaceChildren(fragment);
+  }
+  const buffered = viewingBuffer();
+  for (let i = 0; i < data.length; i++) {
+    const cell = cells.children[i],
+      value = String(data[i]);
+    if (cell.lastChild.textContent !== value) {
+      cell.lastChild.textContent = value;
+      cell.setAttribute('aria-label', 'A[' + i + '] = ' + value);
+    }
+    cell.classList.toggle('on', !buffered && !!event && (i === event.i || i === event.j));
+    cell.classList.toggle('picked', i === plot.picked);
+    const pressed = String(i === plot.picked);
+    if (cell.getAttribute('aria-pressed') !== pressed) cell.setAttribute('aria-pressed', pressed);
+  }
+}
+nodes.cells.addEventListener('click', (event) => {
+  const cell = event.target.closest('button');
+  if (cell) selectIndex(Number(cell.dataset.index));
+});
+
+function render(motion) {
+  const { state, length } = score,
+    { position, event } = state,
+    scope = event?.scope;
+  const lesson = explain(algorithm, event);
+  nodes.action.textContent = lesson.action;
+  nodes.phase.textContent = scope
+    ? [scope.pass ? '第 ' + scope.pass + ' 趟' : '', scope.phase, '[' + scope.lo + '…' + scope.hi + ']']
+        .filter(Boolean)
+        .join(' · ')
+    : '准备就绪';
+  nodes.formula.textContent = lesson.formula;
+  nodes.note.textContent = position === length ? lesson.note + ' 排序完成。' : lesson.note;
+  nodes['step-no'].textContent = 'STEP ' + String(position).padStart(3, '0');
+  nodes.operands.replaceChildren(
+    ...lesson.operands.map(([name, value]) => {
+      const box = el('div');
+      box.className = 'operand';
+      box.append(el('span', name), el('b', value));
+      return box;
+    }),
+  );
+  Array.from(nodes.pseudo.children).forEach((line, index) => {
+    line.classList.toggle('current', index === event?.line);
+    if (index === event?.line) line.setAttribute('aria-current', 'step');
+    else line.removeAttribute('aria-current');
+  });
+  nodes.timeline.value = position;
+  nodes.timeline.style.setProperty('--fill', (length ? (position / length) * 100 : 0) + '%');
+  nodes.progress.value = position + ' / ' + length;
+  nodes.compares.textContent = state.comparisons;
+  nodes.writes.textContent = state.writes;
+  nodes.prev.disabled = nodes.first.disabled = position === 0;
+  nodes.next.disabled = nodes.last.disabled = position === length;
+  const pivot = algorithm === 'quick' && event ? (event.line === 4 ? event.i : scope.hi) : null;
+  plot.show({ values: chartValues(algorithm, state), max: input.length, event, pivot }, motion);
+  updateCells();
+  updatePlotSource();
+  updatePlay();
+}
+
+function go(target, animated = true) {
+  const before = score.state.position,
+    previous = score.state.event;
+  const { position, event } = score.seek(target);
+  const change = before < position ? event : previous;
+  const moving =
+    animated &&
+    Math.abs(before - position) === 1 &&
+    change &&
+    change.kind !== 'compare' &&
+    !viewingBuffer();
+  const motion = moving
+    ? {
+        kind: change.kind,
+        i: change.i,
+        j: change.j,
+        from: before < position ? change.previous : change.value,
+      }
+    : null;
+  if (position === score.length) stop();
+  render(motion);
+}
+function updatePlay() {
+  const text = running ? '暂停' : score.state.position === score.length ? '重播' : '播放';
+  nodes.play.firstElementChild.innerHTML = icon(running ? 'pause' : 'play');
+  nodes.play.lastElementChild.textContent = text;
+}
+function stop() {
+  running = false;
+  clearTimeout(timer);
+  if (score) updatePlay();
+}
+function schedule() {
+  clearTimeout(timer);
+  if (!running || document.hidden) return;
+  timer = setTimeout(
+    () => {
+      go(score.state.position + 1);
+      schedule();
+    },
+    850 / Number(nodes.speed.value),
+  );
+}
+function togglePlay() {
+  if (running) {
+    stop();
+    return;
+  }
+  if (score.state.position === score.length) go(0, false);
+  running = true;
+  updatePlay();
+  schedule();
+}
+function manual(target, animated = true) {
+  stop();
+  go(target, animated);
+}
+
+function loadStudy() {
+  stop();
+  hovered = null;
+  plot.picked = null;
+  score = buildScore(input, algorithm);
+  nodes.timeline.max = score.length;
+  nodes.samples.value = input.length;
+  const lesson = lessons[algorithm];
+  byId('title').textContent = algorithms[algorithm];
+  byId('english').textContent = lesson.english;
+  byId('summary').textContent = lesson.summary;
+  byId('facts').textContent =
+    '平均时间 ' + lesson.complexity + '　·　' + (lesson.stable ? '稳定排序' : '非稳定排序');
+  nodes.pseudo.replaceChildren(
+    ...lesson.code.map((code, i) => {
+      const line = el('li');
+      line.append(el('span', String(i + 1).padStart(2, '0')), document.createTextNode(code));
+      return line;
+    }),
+  );
+  byId('algorithms')
+    .querySelectorAll('button')
+    .forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.key === algorithm)));
+  go(Math.min(1, score.length), false);
+}
+function shuffle(n) {
+  const values = Array.from({ length: n }, (_, i) => i + 1);
   for (let i = n - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [values[i], values[j]] = [values[j], values[i]];
   }
-  return values;
+  if (n === input.length && values.every((v, i) => v === input[i]))
+    [values[0], values[1]] = [values[1], values[0]];
+  input = values;
+  loadStudy();
 }
-function ui() {
-  const { position, comparisons, writes } = score.state;
-  const ended = position === score.length;
-  $('timeline').value = position;
-  $('timeline').style.setProperty('--fill', (100 * position / score.length) + '%');
-  $('progress-count').textContent = position.toLocaleString() + ' / ' + score.length.toLocaleString();
-  $('compares').textContent = String(comparisons).padStart(4, '0');
-  $('writes').textContent = String(writes).padStart(4, '0');
-  $('first').disabled = $('prev').disabled = !position;
-  $('last').disabled = $('next').disabled = ended;
-  const label = playing ? '暂停演出' : ended ? '再次演出' : position ? '继续演出' : '开始演出';
-  if ($('play').lastElementChild.textContent !== label) {
-    $('play').innerHTML = '<i data-icon>' + icon(playing ? 'pause' : 'play') + '</i><span>' + label + '</span>';
-  }
-  const status = playing ? '演出中' : ended ? '已完成' : position ? '已暂停' : '就绪';
-  if ($('status').textContent !== status) $('status').textContent = status;
-  $('instrument').classList.toggle('is-playing', playing);
-  drawNeeded = true;
-}
-function pause() {
-  playing = false;
-  endAt = 0;
-  audio.stop();
-}
-function reset(randomize) {
-  pause();
-  if (randomize) sample = generate(Number($('samples').value));
-  max = Math.max(...sample);
-  score = buildScore(sample, $('algorithm').value);
-  $('timeline').max = score.length;
-  stage.clear();
-  ui();
-}
-function burst(time, index, power, kind) {
-  stage.surge(time, score.state.data, max, index, power);
-  audio.impact(kind, index / Math.max(1, sample.length - 1));
-  drawNeeded = true;
-}
-function manualBurst() {
-  if ($('burst').disabled) return;
-  audio.unlock(); audio.level(true);
-  const index = score.state.event?.i ?? Math.floor(sample.length / 2);
-  const time = performance.now(), radius = Math.max(2, Math.round(sample.length * .12));
-  stage.clearBand({ first: Math.max(0, index - radius), last: Math.min(sample.length - 1, index + radius) }, sample.length, time);
-  burst(time, index, 1.48, 'burst');
-  stage.render(score.state, max, time);
-  $('burst').disabled = true;
-  window.setTimeout(() => { $('burst').disabled = false; }, 850);
-}
-function start() {
-  if (score.state.position === score.length) score.seek(0);
-  playing = true;
-  endAt = fractionalSteps = beatPhase = 0;
-  lastTick = -1;
-  previousTime = performance.now();
-  stage.clear();
-  audio.start();
-  if (!score.state.position) burst(previousTime, Math.floor(sample.length / 2), 1.1, 'burst');
-  ui();
-}
-function toggle() {
-  if (playing) { pause(); ui(); } else start();
-}
-function act(time, single = false) {
-  const { event, data } = score.state;
-  if (!event) return;
-  stage.react(event, data, max, time);
-  audio.note(data[event.i] / max, event.i / Math.max(1, data.length - 1), event.kind, lastTick, single);
-}
-function scrub(index, audition = false) {
-  pause(); stage.clear();
-  score.seek(index);
-  if (audition && score.state.event) { audio.unlock(); act(performance.now(), true); }
-  ui();
-}
-function selectWorld(index) {
-  worldIndex = index;
-  const w = worlds[index];
-  document.documentElement.style.setProperty('--accent', w.accent);
-  for (const image of $('backdrop').children) image.style.opacity = Number(image.dataset.world == index);
-  $('scene-number').textContent = 'SCENE 0' + (index + 1);
-  $('scene-name').textContent = w.name;
-  $('scene-english').textContent = w.english;
-  $('stage-bpm').textContent = w.bpm;
-  for (const button of $('world-list').children) button.setAttribute('aria-pressed', button.dataset.world == index);
-  stage.setWorld(w);
-  audio.setWorld(w);
-  beatPhase = 0; lastTick = -1;
-  drawNeeded = true;
-}
-function soundSwitch() {
-  audio.enabled = !audio.enabled;
-  if (audio.enabled) audio.unlock();
-  audio.level(playing);
-  $('audio').setAttribute('aria-pressed', audio.enabled);
-  $('audio').innerHTML = '<i data-icon>' + icon(audio.enabled ? 'volume' : 'mute') + '</i><span>声音' + (audio.enabled ? '开启' : '关闭') + '</span>';
-}
-function setImmersiveUI() {
-  const el = $('instrument');
-  const on = el.classList.contains('fallback-full') || document.fullscreenElement === el;
-  const title = on ? '退出沉浸模式' : '进入沉浸模式';
-  $('immersive').innerHTML = '<i data-icon>' + icon(on ? 'collapse' : 'expand') + '</i>';
-  $('immersive').title = title + ' (F)';
-  $('immersive').setAttribute('aria-label', title);
-}
-async function immersive() {
-  const el = $('instrument');
-  if (el.classList.contains('fallback-full')) el.classList.remove('fallback-full');
-  else if (document.fullscreenElement) await document.exitFullscreen();
-  else {
-    try { await el.requestFullscreen(); }
-    catch { el.classList.add('fallback-full'); }
-  }
-  setImmersiveUI();
-}
-function loop(time) {
-  requestAnimationFrame(loop);
-  if (document.hidden || (!visible && !playing && !endAt)) { previousTime = time; return; }
-  const dt = Math.max(0, Math.min(100, time - previousTime));
-  previousTime = time;
-  if (playing) {
-    const bpm = worlds[worldIndex].bpm;
-    beatPhase += dt * bpm / 15000;
-    const tick = Math.floor(beatPhase);
-    if (tick !== lastTick) {
-      lastTick = tick;
-      audio.beat(tick, score.state.position / score.length);
-      if (tick % 4 === 0) stage.downbeat(time);
+for (const [key, label] of Object.entries(algorithms)) {
+  const button = el('button', label);
+  button.dataset.key = key;
+  button.addEventListener('click', () => {
+    if (algorithm !== key) {
+      algorithm = key;
+      loadStudy();
     }
-    // Large samples group operations into one display frame without dropping history.
-    const baseRate = Math.max(8 * bpm / 60, score.length / 80);
-    fractionalSteps += dt / 1000 * baseRate * Number($('speed').value);
-    const steps = Math.floor(fractionalSteps);
-    if (steps) {
-      fractionalSteps -= steps;
-      const from = score.state.position;
-      score.seek(score.state.position + steps);
-      act(time);
-      const to = score.state.position;
-      if (to < score.length) {
-        const cleared = score.bands.filter(band => from < band.step && band.step <= to);
-        for (const band of cleared) stage.clearBand(band, sample.length, time);
-        if (cleared.length) {
-          const { first, last } = cleared[0];
-          burst(time, (first + last) >> 1, .85, 'clear');
-        } else if (Math.floor(4 * from / score.length) < Math.floor(4 * to / score.length)) {
-          burst(time, score.state.event.i, 1.18, 'burst');
-        }
-      } else {
-        playing = false;
-        audio.active = false;
-        endAt = time;
-        stage.finish(time, score.state.data, max);
-        audio.finish();
-      }
-      ui();
-    }
-  } else if (endAt && time - endAt > 2500) {
-    endAt = 0;
-    if ($('continuous').checked) {
-      selectWorld((worldIndex + 1) % worlds.length);
-      reset(true); start();
-    }
-  }
-  const idleInterval = stage.reduced ? Infinity : 1000 / 24;
-  if (drawNeeded || stage.dirty || time - lastDraw >= (playing || endAt || time < stage.animatedUntil ? 1000 / 65 : idleInterval)) {
-    if (visible) stage.render(score.state, max, time); lastDraw = time; drawNeeded = false;
-  }
+  });
+  byId('algorithms').append(button);
 }
-
-$('world-list').innerHTML = worlds.map((w,i) =>
-  `<button class="world" data-world="${i}" aria-pressed="${i === 0}" aria-label="${w.name}，${w.tone}，${w.bpm} BPM" title="${w.tone}" style="--card-accent:${w.accent}"><img src="./worlds/${w.id}.webp" class="art" alt=""><span class="track-no">TRACK 0${i+1}</span><span class="world-check"><i data-icon="check"></i></span><span class="world-copy"><strong>${w.name}</strong><small>${w.english}</small></span><span class="card-bpm"><i data-icon="music"></i>${w.bpm} BPM</span></button>`
-).join('');
-$('backdrop').innerHTML = worlds.map((w,i) => `<img alt="" data-world="${i}" src="./worlds/${w.id}.webp" style="opacity:${i===0?1:0}">`).join('');
-iconsIn(document);
-$('world-list').addEventListener('click', event => {
-  const button = event.target.closest('button[data-world]');
-  if (button && Number(button.dataset.world) !== worldIndex) { endAt = 0; selectWorld(Number(button.dataset.world)); }
+byId('shuffle').addEventListener('click', () => shuffle(input.length));
+nodes.samples.addEventListener('change', () => {
+  const n = nodes.samples.valueAsNumber;
+  const count = Number.isFinite(n) ? Math.max(2, Math.min(500, Math.round(n))) : input.length;
+  if (count !== input.length) shuffle(count);
+  else nodes.samples.value = input.length;
 });
-$('play').onclick = toggle;
-$('shuffle').onclick = () => reset(true);
-$('algorithm').onchange = () => reset(false);
-$('samples').onchange = () => {
-  const n = $('samples').valueAsNumber;
-  $('samples').value = Number.isFinite(n) ? Math.max(2, Math.min(500, Math.round(n))) : sample.length;
-  if (Number($('samples').value) !== sample.length) reset(true);
-};
-$('timeline').oninput = () => scrub(Number($('timeline').value));
-$('first').onclick = () => scrub(0);
-$('prev').onclick = () => scrub(score.state.position - 1, true);
-$('next').onclick = () => scrub(score.state.position + 1, true);
-$('last').onclick = () => scrub(score.length);
-$('audio').onclick = soundSwitch;
-$('burst').onclick = manualBurst;
-$('immersive').onclick = immersive;
-document.addEventListener('fullscreenchange', setImmersiveUI);
-$('help').onclick = () => { pause(); ui(); guide.showModal(); };
-$('reduced').checked = stage.reduced;
-$('reduced').onchange = () => { stage.reduced = $('reduced').checked; stage.clear(); drawNeeded = true; };
-document.addEventListener('keydown', e => {
-  if (guide.open || e.ctrlKey || e.altKey || e.metaKey || /^(SELECT|INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
-  if (e.code === 'Space' && /^(BUTTON|A)$/.test(e.target.tagName)) return;
-  const actions = { Space:toggle, ArrowLeft:() => scrub(score.state.position - 1, true), ArrowRight:() => scrub(score.state.position + 1, true),
-    Home:() => scrub(0), End:() => scrub(score.length), KeyR:() => reset(true), KeyF:immersive, KeyM:soundSwitch, KeyX:manualBurst,
-    Escape:() => { $('instrument').classList.remove('fallback-full'); setImmersiveUI(); } };
-  if (actions[e.code]) { e.preventDefault(); if (!e.repeat || e.code.startsWith('Arrow')) actions[e.code](); }
+nodes.play.addEventListener('click', togglePlay);
+nodes.first.addEventListener('click', () => manual(0, false));
+nodes.prev.addEventListener('click', () => manual(score.state.position - 1));
+nodes.next.addEventListener('click', () => manual(score.state.position + 1));
+nodes.last.addEventListener('click', () => manual(score.length, false));
+nodes.timeline.addEventListener('input', () => manual(Number(nodes.timeline.value), false));
+nodes.speed.addEventListener('change', schedule);
+document.querySelectorAll('[data-view]').forEach((button) =>
+  button.addEventListener('click', () => {
+    plot.front = button.dataset.view === 'front';
+    document
+      .querySelectorAll('[data-view]')
+      .forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
+    byId('graph-name').textContent = plot.front ? '正视点阵' : '三维点阵';
+    plot.draw(performance.now());
+  }),
+);
+byId('help').addEventListener('click', () => {
+  stop();
+  nodes.dialog.showModal();
 });
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) {
-    resumeOnVisibility = playing;
-    if (playing) { playing = false; ui(); }
-    audio.stop();
-  } else if (resumeOnVisibility) {
-    resumeOnVisibility = false;
-    playing = true;
-    audio.start();
-    ui();
+document.addEventListener('visibilitychange', schedule);
+document.addEventListener('keydown', (event) => {
+  if (
+    nodes.dialog.open ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.target.closest('input,select,textarea,[contenteditable="true"]')
+  )
+    return;
+  switch (event.key) {
+    case 'ArrowLeft':
+      manual(score.state.position - 1);
+      break;
+    case 'ArrowRight':
+      manual(score.state.position + 1);
+      break;
+    case 'Home':
+      manual(0, false);
+      break;
+    case 'End':
+      manual(score.length, false);
+      break;
+    case ' ':
+      if (event.target.closest('button,a') || event.repeat) return;
+      togglePlay();
+      break;
+    default:
+      return;
   }
-  previousTime = performance.now();
+  event.preventDefault();
 });
-new IntersectionObserver(entries => {
-  visible = entries[0].isIntersecting;
-  drawNeeded = true;
-  previousTime = performance.now();
-}).observe($('instrument'));
-
-reset(true);
-requestAnimationFrame(loop);
+loadStudy();

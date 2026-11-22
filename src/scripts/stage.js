@@ -1,315 +1,286 @@
-import { Impact, scatterAt } from './impact.js';
+const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+const mono = '"SFMono-Regular",Consolas,monospace';
 
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(v, hi));
-const tau = Math.PI * 2;
-const tint = (h, s, l, a = 1) => `hsla(${h},${s}%,${l}%,${a})`;
-function hueAt(stops, p) {
-  const f = clamp(p, 0, .99999) * (stops.length - 1), i = Math.floor(f);
-  const delta = ((stops[i + 1] - stops[i] + 540) % 360) - 180;
-  return stops[i] + delta * (f - i);
-}
-function path(ctx, points, color) {
+function polygon(ctx, vertices, fill, stroke) {
   ctx.beginPath();
-  ctx.moveTo(points[0], points[1]);
-  for (let i = 2; i < points.length; i += 2) ctx.lineTo(points[i], points[i + 1]);
+  ctx.moveTo(...vertices[0]);
+  for (let i = 1; i < vertices.length; i++) ctx.lineTo(...vertices[i]);
   ctx.closePath();
-  ctx.fillStyle = color;
+  ctx.fillStyle = fill;
   ctx.fill();
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 0.65;
+  ctx.stroke();
 }
 
-export class Stage {
-  constructor(canvas, world, reduced) {
+// Parallel projection keeps equal values equal in height, even while the view rotates.
+export class ParticlePlot {
+  constructor(canvas, select, hover) {
     this.canvas = canvas;
-    this.ctx = canvas.getContext('2d', { alpha: true });
-    this.reduced = reduced;
-    this.impact = new Impact(canvas.parentElement);
-    this.particles = [];
-    this.rings = [];
-    this.motion = new Map();
-    this.dust = Array.from({length: 92}, () => ({
-      x: Math.random(), y: Math.random(), seed: Math.random(), size: .45 + Math.random() * 1.05
-    }));
-    this.setWorld(world);
-    this.resize();
+    this.ctx = canvas.getContext('2d');
+    this.select = select;
+    this.hover = hover;
+    this.yaw = 0.47;
+    this.front = false;
+    this.picked = null;
+    this.reduce = matchMedia('(prefers-reduced-motion: reduce)');
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(canvas);
-  }
-  setWorld(world) {
-    this.world = world;
-    this.impact.setWorld(world);
-    // Bake the vertical glass faces once for every colour, then scale them per value.
-    this.atlas = document.createElement('canvas');
-    this.atlas.width = 48 * 24; this.atlas.height = 192;
-    const ctx = this.atlas.getContext('2d');
-    for (let i = 0; i < 48; i++) {
-      const h = hueAt(world.hues, i / 47), x = i * 24;
-      const g = ctx.createLinearGradient(0, 0, 0, 192);
-      g.addColorStop(0, tint(h, 100, 72, .98));
-      g.addColorStop(.12, tint(h, 92, 63, .9));
-      g.addColorStop(.65, tint(h, 80, 45, .64));
-      g.addColorStop(1, tint(h, 86, 27, .58));
-      ctx.fillStyle = g; ctx.fillRect(x, 0, 24, 192);
-      const facet = ctx.createLinearGradient(x, 0, x + 24, 0);
-      facet.addColorStop(0, '#ffffff5e'); facet.addColorStop(.08, '#ffffff16');
-      facet.addColorStop(.76, '#ffffff00'); facet.addColorStop(.77, '#150c412e');
-      facet.addColorStop(1, '#0c073a6e');
-      ctx.fillStyle = facet; ctx.fillRect(x, 0, 24, 192);
-    }
-    this.clear();
-  }
-  clear() {
-    this.impact.reset();
-    this.particles.length = 0; this.rings.length = 0; this.motion.clear();
-    this.animatedUntil = 0;
-    this.finale = -1e5; this.kick = -1e5; this.surgeTime = -1e5; this.arc = null;
+    this.resize();
+    canvas.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      this.drag = { x: e.clientX, y: e.clientY, yaw: this.yaw, moved: false };
+      canvas.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (this.drag) {
+        const dx = e.clientX - this.drag.x;
+        if (Math.abs(dx) > 5 || Math.abs(e.clientY - this.drag.y) > 7) this.drag.moved = true;
+        if (this.drag.moved && !this.front) {
+          this.yaw = clamp(this.drag.yaw + dx * 0.003, -0.62, 0.62);
+          canvas.classList.add('dragging');
+          this.draw(performance.now());
+        }
+      } else this.hover(this.hit(e));
+    });
+    canvas.addEventListener('pointerup', (e) => {
+      if (this.drag && !this.drag.moved) this.select(this.hit(e));
+      this.drag = null;
+      canvas.classList.remove('dragging');
+    });
+    canvas.addEventListener('pointercancel', () => {
+      this.drag = null;
+      canvas.classList.remove('dragging');
+    });
+    canvas.addEventListener('pointerleave', () => this.hover(null));
+    this.reduce.addEventListener('change', () => {
+      this.motion = null;
+      this.draw(performance.now());
+    });
   }
   resize() {
-    this.w = this.canvas.clientWidth; this.h = this.canvas.clientHeight;
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.canvas.width = Math.max(1, Math.round(this.w * this.dpr));
-    this.canvas.height = Math.max(1, Math.round(this.h * this.dpr));
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.dirty = true;
+    this.w = this.canvas.clientWidth;
+    this.h = this.canvas.clientHeight;
+    const dpi = Math.min(2, window.devicePixelRatio || 1);
+    this.canvas.width = Math.round(this.w * dpi);
+    this.canvas.height = Math.round(this.h * dpi);
+    this.ctx.setTransform(dpi, 0, 0, dpi, 0, 0);
+    this.draw(performance.now());
   }
-  geometry(n) {
-    const margin = this.w * (this.w < 550 ? .045 : .072);
-    const pitch = (this.w - 2 * margin) / n;
-    return { margin, pitch, bar: Math.min(54, pitch * (n > 150 ? .86 : .72)),
-      base: this.h - (this.w < 550 ? 48 : 54), height: this.h * (this.w < 550 ? .40 : .48) };
+  hit(e) {
+    if (!this.frame || !this.geometry) return null;
+    const box = this.canvas.getBoundingClientRect(),
+      x = e.clientX - box.left;
+    const { origin, pitch, n } = this.geometry;
+    const i = Math.floor((x - origin) / pitch);
+    return i >= 0 && i < n ? i : null;
   }
-  react(event, values, max, time, animate = true) {
-    if (!event || this.reduced || !animate) return;
-    const { margin, pitch, base, height } = this.geometry(values.length);
-    const strong = event.kind !== 'compare';
-    const indices = event.i === event.j ? [event.i] : [event.i, event.j];
-    for (const i of indices) {
-      const x = margin + (i + .5) * pitch, y = base - height * (.055 + .945 * values[i] / max);
-      const hue = hueAt(this.world.hues, i / Math.max(1, values.length - 1));
-      if (strong) {
-        const from = event.kind === 'swap' ? values[i === event.i ? event.j : event.i] : event.previous;
-        this.motion.set(i, { time, from });
-      }
-      const count = strong ? 6 : 2;
-      for (let j = 0; j < count; j++) {
-        this.particles.push({ x, y, vx: (Math.random() - .5) * (strong ? 120 : 45),
-          vy: -22 - Math.random() * (strong ? 110 : 32), birth: time, life: .3 + Math.random() * .65,
-          hue, size: .7 + Math.random() * 1.6 });
-      }
-      if (strong && this.rings.length < 18) this.rings.push({ x, y: base, time, hue });
+  show(frame, motion = null) {
+    this.frame = frame;
+    this.motion = motion && !this.reduce.matches ? { ...motion, start: performance.now() } : null;
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    this.draw(performance.now());
+  }
+  tick = (time) => {
+    this.raf = 0;
+    this.draw(time);
+  };
+  draw(time) {
+    if (!this.frame || this.w < 1 || this.h < 1) return;
+    const ctx = this.ctx,
+      w = this.w,
+      h = this.h;
+    const { values, max, event, pivot } = this.frame,
+      n = values.length;
+    const yaw = this.front ? 0 : this.yaw,
+      pitchAngle = this.front ? 0 : 0.3;
+    const cy = Math.cos(yaw),
+      sy = Math.sin(yaw),
+      cp = Math.cos(pitchAngle),
+      sp = Math.sin(pitchAngle);
+    const pad = w < 470 ? 23 : 42;
+    const available = w - pad * 2,
+      step = available / n,
+      pitch = step / cy;
+    const bw = Math.min(65, pitch * 0.62),
+      depth = Math.min(35, bw * 0.7);
+    const span = pitch * n;
+    const base = h - 27,
+      top = Math.max(54, h - 63);
+    // An oblique projection holds the row on one baseline while the depth faces turn.
+    const project = (x, y, z) => [w / 2 + x * cy + z * sy, base - y * cp - z * cy * sp];
+    const centre = (i) => (i + 0.5 - n / 2) * pitch;
+    this.geometry = { origin: pad, pitch: step, n };
+    ctx.clearRect(0, 0, w, h);
+    const line = (a, b, color, width = 1) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.moveTo(...a);
+      ctx.lineTo(...b);
+      ctx.stroke();
+    };
+    const floorDepth = Math.max(14, depth * 1.8);
+    const left = -span / 2,
+      right = span / 2;
+    for (let k = 0; k <= 4; k++)
+      line(
+        project(left, 0, (k * floorDepth) / 4),
+        project(right, 0, (k * floorDepth) / 4),
+        '#3a3a3a',
+        0.65,
+      );
+    for (let i = 0; i <= n; i += Math.max(1, Math.ceil(n / 55))) {
+      const x = left + pitch * i;
+      line(project(x, 0, 0), project(x, 0, floorDepth), '#393939', 0.75);
     }
-    const x1 = margin + (event.i + .5) * pitch, x2 = margin + (event.j + .5) * pitch;
-    const y1 = base - height * (.055 + .945 * values[event.i] / max);
-    const y2 = base - height * (.055 + .945 * values[event.j] / max);
-    // A merge write lands from above; swaps connect the actual pair of columns.
-    this.impact.contact(x1, y1, x2, event.i === event.j ? Math.max(8, y1 - height * .68) : y2,
-      strong, time, this.w, this.h);
-    if (strong && event.i !== event.j) {
-      this.arc = { a: event.i, b: event.j, time };
+    const guideValues = [...new Set([0, Math.round(max / 2), max])];
+    ctx.font = '10px ' + mono;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (const value of guideValues) {
+      const a = project(left, (top * value) / max, 0),
+        b = project(right, (top * value) / max, 0);
+      ctx.setLineDash([2, 5]);
+      line(a, b, '#404040', 0.7);
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#aaa';
+      ctx.fillText(value, pad - 9, a[1]);
     }
-    if (this.particles.length > 400) this.particles.splice(0, this.particles.length - 400);
-  }
-  downbeat(time) { this.kick = time; }
-  surge(time, values, max, index, power = 1) {
-    this.surgeTime = time;
-    if (this.reduced) return;
-    this.animatedUntil = time + 1600;
-    const { margin, pitch, height, base } = this.geometry(values.length);
-    const x = margin + (index + .5) * pitch, y = base - height * (.055 + .945 * values[index] / max);
-    this.impact.blast(x, y, time, this.w, this.h, power);
-  }
-  clearBand(band, n, time) {
-    if (this.reduced) return;
-    const { first, last } = band;
-    const { bar } = this.geometry(n);
-    this.impact.clearBand(first, last, time, 145, n, bar);
-  }
-  finish(time, values, max) {
-    this.finale = time; this.kick = time;
-    this.surge(time, values, max, Math.floor(values.length / 2), 1.5);
-    if (this.reduced) return;
-    const { margin, pitch, base, height } = this.geometry(values.length);
-    this.impact.clearBand(0, values.length - 1, time + 65, 870, values.length, this.geometry(values.length).bar);
-    const groups = Math.min(15, values.length);
-    for (let k = 0; k < groups; k++) {
-      const fraction = k / Math.max(1, groups - 1), i = Math.round(fraction * (values.length - 1));
-      const x = margin + (i + .5) * pitch, y = base - height * (.055 + .945 * values[i] / max);
-      for (let j = 0; j < 15; j++) {
-        const angle = -Math.PI * (j + .5) / 15, velocity = 27 + Math.random() * 105;
-        this.particles.push({ x, y, birth: time + 125 + fraction * 1050, life: .55 + Math.random() * .88,
-          vx: Math.cos(angle) * velocity, vy: Math.sin(angle) * velocity - 14,
-          size: .85 + Math.random() * 1.55, hue: hueAt(this.world.hues, fraction) });
-      }
-    }
-  }
-  resonance(time, values, max, layout) {
-    const ctx = this.ctx, w = this.w, h = this.h;
-    const { pitch, margin, height, base } = layout;
-    const age = (time - this.surgeTime) / 1000;
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    if (age >= 0 && age < 2) {
-      const envelope = Math.sin(Math.PI * age / 2);
-      const color = this.world.hues[2];
-      const style = this.world.id;
-      const count = style === 'aurora' ? 20 : 14;
-      for (let k = 0; k < count; k++) {
-        const u = k / count;
-        ctx.strokeStyle = tint(color + 42 * u, 90, 70, envelope * (1 - u * .4) * .28);
-        ctx.lineWidth = 1 + u;
-        ctx.beginPath();
-        if (style === 'aurora') {
-          const y = h * (.1 + .3 * u) - age * 33;
-          ctx.moveTo(-20, base - age * 16);
-          ctx.bezierCurveTo(w * .33, y + h * .55, w * (.56 + u * .1), y - h * .22, w + 22, y);
-        } else if (style === 'abyss') {
-          ctx.ellipse(w * .72, h * .4, 4 + age * w * .30 + u * 65, 2 + age * h * .42 + u * 27, -.18, 0, tau);
-        } else {
-          const a = -Math.PI * (.13 + u * .76), r = w * (.06 + age * .34);
-          const cx = w * .76, cy = h * .86;
-          ctx.moveTo(cx + Math.cos(a) * r * .6, cy + Math.sin(a) * r * .6);
-          ctx.quadraticCurveTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r, cx + Math.cos(a + .16) * r * 1.34, cy + Math.sin(a + .16) * r * 1.34);
-        }
-        ctx.stroke();
-      }
-    }
-    if (this.arc && time - this.arc.time < 320) {
-      const { a, b } = this.arc, phase = (time - this.arc.time) / 320;
-      const x1 = margin + (a + .5) * pitch, x2 = margin + (b + .5) * pitch;
-      const y1 = base - height * (.055 + .945 * values[a] / max);
-      const y2 = base - height * (.055 + .945 * values[b] / max);
-      const top = Math.min(y1, y2) - Math.min(42, 7 + Math.abs(x2-x1) * .10);
-      ctx.strokeStyle = tint(this.world.hues[1], 90, 83, .65 * (1 - phase));
-      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo((x1+x2)/2, top, x2, y2); ctx.stroke();
-      ctx.fillStyle = tint(this.world.hues[0], 90, 94, 1 - phase);
-      ctx.beginPath(); ctx.arc(x1 + (x2-x1)*phase, (1-phase)**2*y1+2*(1-phase)*phase*top+phase**2*y2, 2, 0, tau); ctx.fill();
-    }
-    ctx.restore();
-  }
-  atmosphere(t, beat) {
-    const ctx = this.ctx, w = this.w, h = this.h, id = this.world.id;
-    const motion = this.reduced ? 0 : t;
-    ctx.save();
-    ctx.globalCompositeOperation = 'screen';
-    for (const d of this.dust) {
-      let x = d.x, y = d.y;
-      let alpha = .20 + .34 * (.5 + .5 * Math.sin(motion * (.45 + d.seed) + d.seed * 100));
-      if (id === 'abyss') {
-        x += .012 * Math.sin(motion * .38 + d.seed * 30);
-        y = (y - motion * (.008 + .02 * d.seed)) % 1;
-        if (y < 0) y++;
-        ctx.strokeStyle = tint(175 + d.seed * 26, 82, 77, alpha * .8);
-        ctx.beginPath(); ctx.arc(x * w, y * h, d.size * 1.8, 0, tau); ctx.stroke();
-      } else {
-        x = (x + motion * (id === 'solar' ? .012 : .002) * d.seed) % 1;
-        y = (y - motion * (id === 'solar' ? .035 : .004) * d.seed) % 1;
-        if (y < 0) y++;
-        ctx.fillStyle = id === 'solar' ? tint(25 + d.seed * 20, 100, 70, alpha) : tint(210 + 70 * d.seed, 80, 88, alpha);
-        ctx.fillRect(x * w, y * h, d.size, d.size * (id === 'solar' ? 2.4 : 1));
-        if (d.seed > .966) {
-          ctx.fillStyle = tint(id === 'solar' ? 32 : 240, 75, 86, alpha * .64);
-          ctx.fillRect(x * w - 2.2, y * h + .4, 6, .6);
-          ctx.fillRect(x * w + .5, y * h - 2, .6, 6);
-        }
-      }
-    }
-    if (beat > .01) {
-      const g = ctx.createRadialGradient(w * .64, h * .72, 1, w * .64, h * .72, w * .52);
-      g.addColorStop(0, tint(this.world.hues[2], 90, 70, beat * .13)); g.addColorStop(1, 'transparent');
-      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-    }
-    ctx.restore();
-  }
-  render(state, max, time) {
-    if (!this.w || !this.h) return;
-    this.dirty = false;
-    const ctx = this.ctx, values = state.data, n = values.length;
-    const { margin, pitch, bar, base, height } = this.geometry(n);
-    const t = time / 1000;
-    const beat = this.reduced ? 0 : Math.max(0, 1 - (time - this.kick) / 420) ** 2;
-    this.impact.move(time, this.w, this.h);
-    ctx.clearRect(0, 0, this.w, this.h);
-    this.atmosphere(t, beat);
-    const line = ctx.createLinearGradient(0, 0, this.w, 0);
-    line.addColorStop(0, 'transparent');
-    this.world.hues.forEach((h, i) => line.addColorStop(.08 + .84 * i / 4, tint(h, 98, 69, .82)));
-    line.addColorStop(1, 'transparent');
-    // A low pool of light anchors the reflections to the stage floor.
-    ctx.save(); ctx.translate(this.w / 2, base + 2); ctx.scale(this.w * .49, 22 + beat * 6);
-    const pool = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
-    pool.addColorStop(0, tint(this.world.hues[2], 100, 75, .32)); pool.addColorStop(1, 'transparent');
-    ctx.fillStyle = pool; ctx.fillRect(-1,-1,2,2); ctx.restore();
-    const event = state.event;
-    const finaleAge = (time - this.finale) / 1000;
+    const elapsed = this.motion ? clamp((time - this.motion.start) / 265, 0, 1) : 1;
+    const ease = elapsed * elapsed * (3 - 2 * elapsed);
+    const change = this.motion;
+    const moving = change && elapsed < 1;
+    const shapes = [];
     for (let i = 0; i < n; i++) {
-      const p = i / Math.max(1, n - 1), h = hueAt(this.world.hues, p);
-      const x = margin + (i + .5) * pitch - bar / 2;
-      const movement = this.motion.get(i);
-      const elapsed = movement ? clamp((time - movement.time) / 115, 0, 1) : 1;
-      const eased = 1 - (1 - elapsed) ** 3;
-      const visualValue = movement ? movement.from + (values[i] - movement.from) * eased : values[i];
-      const bh = Math.max(2, height * (.055 + .945 * visualValue / max)), y = base - bh;
-      const active = event && (i === event.i || i === event.j);
-      const fade = movement ? Math.max(0, 1 - (time - movement.time) / 390) : 0;
-      if (movement && !fade) this.motion.delete(i);
-      const cap = Math.min(3.4, bar * .23), sx = Math.round(p * 47) * 24;
-      const sweep = !this.reduced && finaleAge >= 0 && finaleAge < 2 ? Math.max(0, 1 - Math.abs(p - (finaleAge * .92 - .15)) * 5) : 0;
-      const fracture = this.impact.fractures.get(i);
-      const age = fracture ? (time - fracture.start) / 1020 : 0;
-      const scatter = scatterAt(age);
-      if (age >= 1) this.impact.fractures.delete(i);
-      ctx.globalAlpha = 1 - .97 * Math.min(1, scatter * 1.65);
-      ctx.drawImage(this.atlas, sx, 0, 24, 192, x, y, bar, bh);
-      if (active || fade || sweep) {
-        ctx.fillStyle = tint(h, 82, 88, Math.max(active ? .48 : 0, fade * .32, sweep * .72));
-        ctx.fillRect(x, y, bar, bh);
-      }
-      if (bar > 4) {
-        path(ctx, [x, y, x + cap, y - cap, x + bar + cap, y - cap, x + bar, y], tint(h, 100, active ? 94 : 80, .96));
-        path(ctx, [x + bar, y, x + bar + cap, y - cap, x + bar + cap, base - cap, x + bar, base], tint(h, 75, 45, .62));
-      }
-      ctx.fillStyle = tint(h, 100, 88, .9); ctx.fillRect(x, y, bar, Math.min(1.25, bar));
-      if ((active || sweep > .18) && !this.reduced) {
-        const glow = ctx.createRadialGradient(x + bar / 2, y, 0, x + bar / 2, y, Math.max(10, Math.min(48, pitch * 2)));
-        glow.addColorStop(0, tint(h, 100, 87, .76)); glow.addColorStop(1, 'transparent');
-        ctx.fillStyle = glow; ctx.fillRect(x - 50, y - 50, bar + 100, 100);
-      }
-      const reflection = Math.min(23, bh * .21);
-      ctx.globalAlpha *= .21;
-      ctx.drawImage(this.atlas, sx, 0, 24, 192, x, base + 1.5, bar, reflection);
-      ctx.globalAlpha = 1;
-      if (scatter > 0) this.impact.fragments(ctx, fracture, scatter, x, y, bar, bh, h, this.h);
+      let slot = i,
+        v = values[i],
+        lift = 0;
+      if (moving && change.kind === 'swap' && (i === change.i || i === change.j)) {
+        const from = i === change.i ? change.j : change.i;
+        slot = from + (i - from) * ease;
+        if (i === change.i) lift = Math.sin(Math.PI * ease) * Math.min(13, step * 0.32);
+      } else if (moving && change.kind === 'write' && i === change.i)
+        v = change.from + (v - change.from) * ease;
+      shapes.push({ i, x: centre(slot), bh: Math.max(1, (v / max) * top), lift });
     }
-    ctx.fillStyle = line; ctx.fillRect(0, base, this.w, 1.3);
-    if (!this.reduced) {
-      this.resonance(time, values, max, { margin, pitch, height, base });
-      this.effects(time);
-      this.impact.draw(ctx, time, this.w, this.h);
+    // Draw the distant prism first. Moving prisms use the same depth ordering.
+    if (yaw !== 0 || moving) shapes.sort((a, b) => (a.x - b.x) * sy || a.lift - b.lift);
+    const labels = [];
+    for (const { i, x, bh, lift } of shapes) {
+      const active = !!event && (event.i === i || event.j === i),
+        pinned = this.picked === i;
+      const inside = !event || (i >= event.scope.lo && i <= event.scope.hi);
+      const x0 = x - bw / 2,
+        x1 = x + bw / 2;
+      const bl = project(x0, lift, 0),
+        br = project(x1, lift, 0),
+        tl = project(x0, lift + bh, 0),
+        tr = project(x1, lift + bh, 0);
+      const ttl = project(x0, lift + bh, depth),
+        ttr = project(x1, lift + bh, depth);
+      const near = sy >= 0 ? x1 : x0;
+      const side = [
+        project(near, lift, 0),
+        project(near, lift, depth),
+        project(near, bh + lift, depth),
+        project(near, bh + lift, 0),
+      ];
+      if (step < 3) {
+        ctx.setLineDash(this.front ? [] : [1.4, 1.1]);
+        line(
+          project(x, lift, 0),
+          project(x, lift + bh, 0),
+          active ? 'white' : inside ? '#b4b4b4' : '#777',
+          Math.max(0.75, step * 0.64),
+        );
+        ctx.setLineDash([]);
+      } else {
+        const edge = active ? '#d7d7d7' : pinned ? '#c0c0c0' : inside ? '#707070' : '#4a4a4a';
+        polygon(ctx, [bl, br, tr, tl], active ? '#505050' : inside ? '#252525' : '#202020', edge);
+        if (!this.front) {
+          polygon(ctx, side, active ? '#333' : '#1d1d1d', edge);
+          polygon(ctx, [tl, tr, ttr, ttl], active ? '#bababa' : inside ? '#474747' : '#303030', edge);
+        }
+        const gap = Math.max(2.6, Math.min(4.3, step * 0.09));
+        const nx = Math.max(1, Math.round(bw / gap)),
+          ny = Math.max(1, Math.round(bh / gap));
+        const nz = this.front ? 0 : Math.max(1, Math.round(depth / gap));
+        const dot = Math.max(0.7, Math.min(1.6, gap * 0.37));
+        // Surface samples are fixed in object space. View changes reproject the same points.
+        ctx.fillStyle = active ? '#fafafa' : inside ? '#ababab' : '#707070';
+        for (let row = 0; row < ny; row++) {
+          const yy = lift + ((row + 0.5) * bh) / ny;
+          for (let col = 0; col < nx; col++) {
+            const uv = project(x0 + ((col + 0.5) * bw) / nx, yy, 0);
+            ctx.fillRect(uv[0] - dot / 2, uv[1] - dot / 2, dot, dot);
+          }
+        }
+        if (!this.front && Math.abs(sy) > 0.1) {
+          ctx.fillStyle = active ? '#a3a3a3' : inside ? '#686868' : '#434343';
+          for (let row = 0; row < ny; row++)
+            for (let col = 0; col < nz; col++) {
+              const uv = project(near, lift + ((row + 0.5) * bh) / ny, ((col + 0.5) * depth) / nz);
+              ctx.fillRect(uv[0], uv[1], dot * 0.77, dot * 0.77);
+            }
+        }
+        if (!this.front) {
+          ctx.fillStyle = active ? '#fff' : '#b5b5b5';
+          for (let row = 0; row < nz; row++)
+            for (let col = 0; col < nx; col++) {
+              const uv = project(x0 + ((col + 0.5) * bw) / nx, bh + lift, ((row + 0.5) * depth) / nz);
+              ctx.fillRect(uv[0], uv[1], dot, dot * 0.82);
+            }
+        }
+      }
+      if (active || pinned || i === pivot || step >= 24) {
+        const [px, py] = project(x, bh + lift, depth * 0.6);
+        labels.push({ x: px, y: py - 8, value: values[i], active, pinned, pivot: i === pivot });
+      }
     }
-  }
-  effects(time) {
-    const ctx = this.ctx, world = this.world.id;
-    ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    this.particles = this.particles.filter(p => {
-      const age = (time - p.birth) / 1000;
-      if (age < 0) return true;
-      if (age >= p.life) return false;
-      const alpha = (1 - age / p.life) ** 1.6;
-      const x = p.x + p.vx * age, y = p.y + p.vy * age + (world === 'abyss' ? -12 : 70) * age * age;
-      ctx.fillStyle = ctx.strokeStyle = tint(p.hue, 95, 79, alpha);
-      if (world === 'abyss') {
-        ctx.beginPath(); ctx.arc(x, y, p.size + age * 2.1, 0, tau); ctx.stroke();
-      } else if (world === 'solar') {
-        ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x - p.vx * .043, y - p.vy * .043); ctx.stroke();
-      } else { ctx.fillRect(x, y, p.size, p.size); }
-      return true;
-    });
-    this.rings = this.rings.filter(r => {
-      const age = (time - r.time) / 1000;
-      if (age > .64) return false;
-      ctx.strokeStyle = tint(r.hue, 100, 75, .48 * (1 - age / .64));
-      ctx.beginPath(); ctx.ellipse(r.x, r.y + 1, 3 + age * 84, 1 + age * 9, 0, 0, tau); ctx.stroke();
-      return true;
-    });
-    ctx.restore();
+    labels.sort(
+      (a, b) => Number(b.active || b.pinned || b.pivot) - Number(a.active || a.pinned || a.pivot),
+    );
+    const placed = [];
+    for (const label of labels) {
+      const text = (label.pivot ? 'P ' : '') + label.value,
+        priority = label.active || label.pinned || label.pivot;
+      ctx.font = (priority ? 'bold ' : '') + (w < 500 ? '11px ' : '12px ') + mono;
+      const tw = ctx.measureText(text).width + 7,
+        x = clamp(label.x, tw / 2 + 2, w - tw / 2 - 2);
+      let y = Math.max(9, label.y);
+      const collides = () =>
+        placed.some((p) => Math.abs(x - p.x) < (tw + p.w) / 2 + 2 && Math.abs(y - p.y) < 15);
+      if (collides() && !priority) continue;
+      while (collides() && y < h - 18) y += 16;
+      placed.push({ x, y, w: tw });
+      if (priority) {
+        ctx.fillStyle = label.active ? '#f0f0f0' : '#484848';
+        ctx.fillRect(x - tw / 2, y - 7, tw, 14);
+      }
+      ctx.fillStyle = label.active ? '#141414' : priority ? '#fff' : '#c7c7c7';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, x, y + 0.5);
+    }
+    const skip = Math.max(1, Math.ceil(24 / step));
+    ctx.font = '10px ' + mono;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < n; i++) {
+      const active = !!event && (i === event.i || i === event.j);
+      if (i % skip && !active && i !== this.picked) continue;
+      const [x, y] = project(centre(i), 0, 0);
+      if (active || i === this.picked) {
+        line([x - Math.min(8, step * 0.4), y + 3], [x + Math.min(8, step * 0.4), y + 3], '#eee', 2);
+      }
+      if (step >= 19 || i % skip === 0) {
+        ctx.fillStyle = active ? '#fff' : '#a0a0a0';
+        ctx.fillText(i, x, y + 14);
+      }
+    }
+    if (moving && !this.raf) this.raf = requestAnimationFrame(this.tick);
+    else if (!moving) this.motion = null;
   }
 }
