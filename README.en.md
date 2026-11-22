@@ -2,7 +2,7 @@
 
 [中文](README.md)
 
-A browser instrument that turns seven sorting algorithms into audiovisual performances. Element values determine pitch and column height. Comparisons light up the active columns, writes release particles, and the final sweep resolves into an ascending arpeggio.
+A browser instrument that turns seven sorting algorithms into audiovisual performances. Element values determine pitch and column height. Comparisons light up the active columns, writes strike branching arcs and shake the stage. Settled bands burst into glass fragments, then reform. The final sweep resolves into an ascending arpeggio. Press X or use the lightning button to trigger a shockwave at the active column.
 
 ![Aurora Pulse, transport controls and the sound world library](assets/readme/screenshot-sorting.png)
 

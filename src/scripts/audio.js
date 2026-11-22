@@ -87,6 +87,34 @@ export class Soundtrack {
     src.start(t);
     src.stop(t + 0.1);
   }
+  impact(kind, position = .5) {
+    if (!this.ctx || !this.enabled) return;
+    const ctx = this.ctx, t = ctx.currentTime + .008;
+    const heavy = kind !== 'contact';
+    if (kind === 'contact' && t < (this.nextContact ?? 0)) return;
+    this.nextContact = t + (heavy ? .19 : .11);
+    const w = this.world, pan = position * 1.5 - .75;
+    const duration = heavy ? .47 : .105;
+    // The same excitation becomes an electrical snap, a pressure thump, or torn metal.
+    const src = ctx.createBufferSource(), filter = ctx.createBiquadFilter(), gain = ctx.createGain();
+    src.buffer = this.noise; src.loop = true;
+    filter.type = 'bandpass';
+    const peak = w.id === 'abyss' ? 1250 : w.id === 'solar' ? 3600 : 4900;
+    filter.Q.value = w.id === 'abyss' ? 3.8 : 1.8;
+    filter.frequency.setValueAtTime(peak, t);
+    filter.frequency.exponentialRampToValueAtTime(w.id === 'abyss' ? 85 : 290, t + duration);
+    gain.gain.setValueAtTime(.0001, t);
+    gain.gain.exponentialRampToValueAtTime(heavy ? .38 : .16, t + .007);
+    gain.gain.exponentialRampToValueAtTime(.0001, t + duration);
+    src.connect(filter).connect(gain).connect(this.master);
+    src.onended = () => { src.disconnect(); filter.disconnect(); gain.disconnect(); };
+    src.start(t); src.stop(t + duration + .01);
+    if (!heavy) return;
+    this.tone(w.root + 3, 'sine', .58, kind === 'clear' ? .22 : .38, t, 0, false, .006, -17);
+    const notes = kind === 'clear' ? [19, 16, 12] : [0, 7, 12];
+    notes.forEach((n, i) => this.tone(w.root + n, w.wave, .28 + .08 * i, .095,
+      t + .045 + i * .055, pan * (i % 2 ? -.8 : 1), true, .006, w.id === 'abyss' ? -5 : 3));
+  }
   beat(tick, progress) {
     if (!this.ctx || !this.enabled || !this.active) return;
     const t = this.ctx.currentTime + 0.008;
@@ -114,6 +142,7 @@ export class Soundtrack {
     const degree = Math.min(13, Math.max(0, Math.floor(value * 14)));
     const midi = w.root + 7 + w.scale[degree % 5] + Math.floor(degree / 5) * 12;
     const strong = kind !== 'compare';
+    if (strong) this.impact('contact', position);
     const length = w.id === 'abyss' ? .85 : w.id === 'solar' ? .21 : .47;
     this.tone(midi, strong ? w.wave : 'sine', length, strong ? .13 : .065, t, position * 1.4 - .7, true);
     if (strong && w.id !== 'solar') this.tone(midi + (w.id === 'abyss' ? 19 : 12), 'sine', length * .48, .034, t);
@@ -121,6 +150,7 @@ export class Soundtrack {
   finish() {
     if (!this.ctx || !this.enabled) return;
     this.level(true);
+    this.impact('finale');
     const t = this.ctx.currentTime + .02;
     const w = this.world;
     [0, w.scale[2], 7, 12, 12 + w.scale[2], 19, 24].forEach((n, i) => {

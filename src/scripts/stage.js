@@ -1,3 +1,5 @@
+import { Impact, scatterAt } from './impact.js';
+
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(v, hi));
 const tau = Math.PI * 2;
 const tint = (h, s, l, a = 1) => `hsla(${h},${s}%,${l}%,${a})`;
@@ -20,6 +22,7 @@ export class Stage {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d', { alpha: true });
     this.reduced = reduced;
+    this.impact = new Impact(canvas.parentElement);
     this.particles = [];
     this.rings = [];
     this.motion = new Map();
@@ -33,6 +36,7 @@ export class Stage {
   }
   setWorld(world) {
     this.world = world;
+    this.impact.setWorld(world);
     // Bake the vertical glass faces once for every colour, then scale them per value.
     this.atlas = document.createElement('canvas');
     this.atlas.width = 48 * 24; this.atlas.height = 192;
@@ -54,12 +58,13 @@ export class Stage {
     this.clear();
   }
   clear() {
+    this.impact.reset();
     this.particles.length = 0; this.rings.length = 0; this.motion.clear();
+    this.animatedUntil = 0;
     this.finale = -1e5; this.kick = -1e5; this.surgeTime = -1e5; this.arc = null;
   }
   resize() {
-    const box = this.canvas.getBoundingClientRect();
-    this.w = box.width; this.h = box.height;
+    this.w = this.canvas.clientWidth; this.h = this.canvas.clientHeight;
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.canvas.width = Math.max(1, Math.round(this.w * this.dpr));
     this.canvas.height = Math.max(1, Math.round(this.h * this.dpr));
@@ -92,17 +97,38 @@ export class Stage {
       }
       if (strong && this.rings.length < 18) this.rings.push({ x, y: base, time, hue });
     }
+    const x1 = margin + (event.i + .5) * pitch, x2 = margin + (event.j + .5) * pitch;
+    const y1 = base - height * (.055 + .945 * values[event.i] / max);
+    const y2 = base - height * (.055 + .945 * values[event.j] / max);
+    // A merge write lands from above; swaps connect the actual pair of columns.
+    this.impact.contact(x1, y1, x2, event.i === event.j ? Math.max(8, y1 - height * .68) : y2,
+      strong, time, this.w, this.h);
     if (strong && event.i !== event.j) {
       this.arc = { a: event.i, b: event.j, time };
     }
     if (this.particles.length > 400) this.particles.splice(0, this.particles.length - 400);
   }
   downbeat(time) { this.kick = time; }
-  surge(time) { this.surgeTime = time; }
+  surge(time, values, max, index, power = 1) {
+    this.surgeTime = time;
+    if (this.reduced) return;
+    this.animatedUntil = time + 1600;
+    const { margin, pitch, height, base } = this.geometry(values.length);
+    const x = margin + (index + .5) * pitch, y = base - height * (.055 + .945 * values[index] / max);
+    this.impact.blast(x, y, time, this.w, this.h, power);
+  }
+  clearBand(band, n, time) {
+    if (this.reduced) return;
+    const { first, last } = band;
+    const { bar } = this.geometry(n);
+    this.impact.clearBand(first, last, time, 145, n, bar);
+  }
   finish(time, values, max) {
-    this.finale = time; this.kick = time; this.surge(time);
+    this.finale = time; this.kick = time;
+    this.surge(time, values, max, Math.floor(values.length / 2), 1.5);
     if (this.reduced) return;
     const { margin, pitch, base, height } = this.geometry(values.length);
+    this.impact.clearBand(0, values.length - 1, time + 65, 870, values.length, this.geometry(values.length).bar);
     const groups = Math.min(15, values.length);
     for (let k = 0; k < groups; k++) {
       const fraction = k / Math.max(1, groups - 1), i = Math.round(fraction * (values.length - 1));
@@ -200,6 +226,7 @@ export class Stage {
     const { margin, pitch, bar, base, height } = this.geometry(n);
     const t = time / 1000;
     const beat = this.reduced ? 0 : Math.max(0, 1 - (time - this.kick) / 420) ** 2;
+    this.impact.move(time, this.w, this.h);
     ctx.clearRect(0, 0, this.w, this.h);
     this.atmosphere(t, beat);
     const line = ctx.createLinearGradient(0, 0, this.w, 0);
@@ -226,6 +253,11 @@ export class Stage {
       if (movement && !fade) this.motion.delete(i);
       const cap = Math.min(3.4, bar * .23), sx = Math.round(p * 47) * 24;
       const sweep = !this.reduced && finaleAge >= 0 && finaleAge < 2 ? Math.max(0, 1 - Math.abs(p - (finaleAge * .92 - .15)) * 5) : 0;
+      const fracture = this.impact.fractures.get(i);
+      const age = fracture ? (time - fracture.start) / 1020 : 0;
+      const scatter = scatterAt(age);
+      if (age >= 1) this.impact.fractures.delete(i);
+      ctx.globalAlpha = 1 - .97 * Math.min(1, scatter * 1.65);
       ctx.drawImage(this.atlas, sx, 0, 24, 192, x, y, bar, bh);
       if (active || fade || sweep) {
         ctx.fillStyle = tint(h, 82, 88, Math.max(active ? .48 : 0, fade * .32, sweep * .72));
@@ -242,12 +274,17 @@ export class Stage {
         ctx.fillStyle = glow; ctx.fillRect(x - 50, y - 50, bar + 100, 100);
       }
       const reflection = Math.min(23, bh * .21);
-      ctx.globalAlpha = .21;
+      ctx.globalAlpha *= .21;
       ctx.drawImage(this.atlas, sx, 0, 24, 192, x, base + 1.5, bar, reflection);
       ctx.globalAlpha = 1;
+      if (scatter > 0) this.impact.fragments(ctx, fracture, scatter, x, y, bar, bh, h, this.h);
     }
     ctx.fillStyle = line; ctx.fillRect(0, base, this.w, 1.3);
-    if (!this.reduced) { this.resonance(time, values, max, { margin, pitch, height, base }); this.effects(time); }
+    if (!this.reduced) {
+      this.resonance(time, values, max, { margin, pitch, height, base });
+      this.effects(time);
+      this.impact.draw(ctx, time, this.w, this.h);
+    }
   }
   effects(time) {
     const ctx = this.ctx, world = this.world.id;

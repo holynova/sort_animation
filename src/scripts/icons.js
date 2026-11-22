@@ -1,4 +1,5 @@
 const shapes = {
+  bolt:'<path d="M14 2 4 14h7l-1 8 10-13h-7l1-7Z" fill="currentColor" stroke="none"/>',
   volume:'<path d="m11 5-6 4H2v6h3l6 4z"/><path d="M15 9a4 4 0 0 1 0 6m3-9a8 8 0 0 1 0 12"/>',
   mute:'<path d="m11 5-6 4H2v6h3l6 4zM16 9l6 6m0-6-6 6"/>',
   keyboard:'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M6 9h.1m4 0h.1m4 0h.1m4 0h.1M6 12h.1m4 0h.1m4 0h.1m4 0h.1M8 15h8"/>',

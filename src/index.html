@@ -25,15 +25,17 @@
   <main class="wrap">
     <section class="instrument" id="instrument" aria-label="排序视听舞台">
       <div class="stage" id="stage">
-        <div class="backdrop" id="backdrop"></div>
-        <div class="shade"></div>
-        <canvas id="visual" aria-label="排序柱状图，柱高表示数值，发光柱表示当前操作"></canvas>
+        <div class="camera" id="camera">
+          <div class="backdrop" id="backdrop"></div>
+          <div class="shade"></div>
+          <canvas id="visual" aria-label="排序柱状图，柱高表示数值，发光柱表示当前操作"></canvas>
+        </div>
         <div class="stage-top">
           <div class="scene-heading">
             <div class="eyebrow"><span class="scene-line"></span><span id="scene-number">SCENE 01</span><span class="scene-split">/</span>03</div>
             <h1 id="scene-name">极光脉冲</h1><p id="scene-english">Aurora Pulse</p>
           </div>
-          <div class="stage-tools"><div class="status" role="status"><span class="status-dot"></span><span id="status">就绪</span></div><button class="immersive icon-button" id="immersive" title="沉浸模式 (F)" aria-label="进入沉浸模式"><i data-icon="expand"></i></button></div>
+          <div class="stage-tools"><div class="status" role="status"><span class="status-dot"></span><span id="status">就绪</span></div><button id="burst" class="burst" title="引爆共振 (X)" aria-label="引爆共振"><i data-icon="bolt"></i><span>引爆</span></button><button class="immersive icon-button" id="immersive" title="沉浸模式 (F)" aria-label="进入沉浸模式"><i data-icon="expand"></i></button></div>
         </div>
         <div class="stage-hud">
           <div class="readouts"><span>比较 <b id="compares">0000</b></span><span>写入 <b id="writes">0000</b></span></div>
@@ -68,7 +70,7 @@
     </section>
   </main>
   <dialog id="guide"><form method="dialog"><div class="dialog-head"><h2>操作指南</h2><button class="icon-button" aria-label="关闭"><i data-icon="close"></i></button></div>
-    <p>柱高表示数值。亮白柱正在比较，彩色光束和粒子标记写入位置。拖动进度条可以回看任意一步。</p>
+    <p>柱高表示数值。亮白柱正在比较，交换触发电弧与震屏，归位的一组柱子会碎裂再聚合。按 X 或点击「引爆」可在当前位置打出共振冲击波。拖动进度条可以回看任意一步。</p>
     <dl><div><dt>播放 / 暂停</dt><dd><kbd>Space</kbd></dd></div><div><dt>逐步回放</dt><dd><kbd>←</kbd> <kbd>→</kbd></dd></div><div><dt>跳至首尾</dt><dd><kbd>Home</kbd> <kbd>End</kbd></dd></div><div><dt>打乱 / 声音 / 沉浸模式</dt><dd><kbd>R</kbd> <kbd>M</kbd> <kbd>F</kbd></dd></div></dl>
     <label class="reduced"><input type="checkbox" id="reduced"> 减弱动态效果</label>
   </form></dialog>

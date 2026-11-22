@@ -55,6 +55,22 @@ function reset(randomize) {
   stage.clear();
   ui();
 }
+function burst(time, index, power, kind) {
+  stage.surge(time, score.state.data, max, index, power);
+  audio.impact(kind, index / Math.max(1, sample.length - 1));
+  drawNeeded = true;
+}
+function manualBurst() {
+  if ($('burst').disabled) return;
+  audio.unlock(); audio.level(true);
+  const index = score.state.event?.i ?? Math.floor(sample.length / 2);
+  const time = performance.now(), radius = Math.max(2, Math.round(sample.length * .12));
+  stage.clearBand({ first: Math.max(0, index - radius), last: Math.min(sample.length - 1, index + radius) }, sample.length, time);
+  burst(time, index, 1.48, 'burst');
+  stage.render(score.state, max, time);
+  $('burst').disabled = true;
+  window.setTimeout(() => { $('burst').disabled = false; }, 850);
+}
 function start() {
   if (score.state.position === score.length) score.seek(0);
   playing = true;
@@ -63,6 +79,7 @@ function start() {
   previousTime = performance.now();
   stage.clear();
   audio.start();
+  if (!score.state.position) burst(previousTime, Math.floor(sample.length / 2), 1.1, 'burst');
   ui();
 }
 function toggle() {
@@ -140,12 +157,20 @@ function loop(time) {
     const steps = Math.floor(fractionalSteps);
     if (steps) {
       fractionalSteps -= steps;
-      const before = score.state.position / score.length;
+      const from = score.state.position;
       score.seek(score.state.position + steps);
       act(time);
-      const after = score.state.position / score.length;
-      if (Math.floor(before * 4) < Math.floor(after * 4)) stage.surge(time);
-      if (score.state.position === score.length) {
+      const to = score.state.position;
+      if (to < score.length) {
+        const cleared = score.bands.filter(band => from < band.step && band.step <= to);
+        for (const band of cleared) stage.clearBand(band, sample.length, time);
+        if (cleared.length) {
+          const { first, last } = cleared[0];
+          burst(time, (first + last) >> 1, .85, 'clear');
+        } else if (Math.floor(4 * from / score.length) < Math.floor(4 * to / score.length)) {
+          burst(time, score.state.event.i, 1.18, 'burst');
+        }
+      } else {
         playing = false;
         audio.active = false;
         endAt = time;
@@ -162,7 +187,7 @@ function loop(time) {
     }
   }
   const idleInterval = stage.reduced ? Infinity : 1000 / 24;
-  if (drawNeeded || stage.dirty || time - lastDraw >= (playing || endAt ? 1000 / 65 : idleInterval)) {
+  if (drawNeeded || stage.dirty || time - lastDraw >= (playing || endAt || time < stage.animatedUntil ? 1000 / 65 : idleInterval)) {
     if (visible) stage.render(score.state, max, time); lastDraw = time; drawNeeded = false;
   }
 }
@@ -190,6 +215,7 @@ $('prev').onclick = () => scrub(score.state.position - 1, true);
 $('next').onclick = () => scrub(score.state.position + 1, true);
 $('last').onclick = () => scrub(score.length);
 $('audio').onclick = soundSwitch;
+$('burst').onclick = manualBurst;
 $('immersive').onclick = immersive;
 document.addEventListener('fullscreenchange', setImmersiveUI);
 $('help').onclick = () => { pause(); ui(); guide.showModal(); };
@@ -199,7 +225,7 @@ document.addEventListener('keydown', e => {
   if (guide.open || e.ctrlKey || e.altKey || e.metaKey || /^(SELECT|INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
   if (e.code === 'Space' && /^(BUTTON|A)$/.test(e.target.tagName)) return;
   const actions = { Space:toggle, ArrowLeft:() => scrub(score.state.position - 1, true), ArrowRight:() => scrub(score.state.position + 1, true),
-    Home:() => scrub(0), End:() => scrub(score.length), KeyR:() => reset(true), KeyF:immersive, KeyM:soundSwitch,
+    Home:() => scrub(0), End:() => scrub(score.length), KeyR:() => reset(true), KeyF:immersive, KeyM:soundSwitch, KeyX:manualBurst,
     Escape:() => { $('instrument').classList.remove('fallback-full'); setImmersiveUI(); } };
   if (actions[e.code]) { e.preventDefault(); if (!e.repeat || e.code.startsWith('Arrow')) actions[e.code](); }
 });

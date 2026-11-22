@@ -9,6 +9,7 @@ export function buildScore(input, algorithm) {
   const events = [];
   const checkpoints = [];
   const block = 256;
+  const lastVisit = new Uint32Array(data.length);
   let comparisons = 0;
   let writes = 0;
 
@@ -17,6 +18,7 @@ export function buildScore(input, algorithm) {
   }
   function record(event) {
     events.push(event);
+    lastVisit[event.i] = lastVisit[event.j] = events.length;
     if (events.length % block === 0) checkpoint();
   }
   function compare(i, j, left = data[i], right = data[j]) {
@@ -129,5 +131,13 @@ export function buildScore(input, algorithm) {
     state.event = events[target - 1] || null;
     return state;
   }
-  return { state, length: events.length, seek };
+  // A band is safe to clear after the last recorded operation touching any of its lanes.
+  const bands = [];
+  const width = Math.max(3, Math.ceil(input.length / 10));
+  for (let first = 0; first < input.length; first += width) {
+    const last = Math.min(first + width, input.length) - 1;
+    const step = Math.max(...lastVisit.subarray(first, last + 1));
+    bands.push({ first, last, step });
+  }
+  return { state, length: events.length, seek, bands };
 }
