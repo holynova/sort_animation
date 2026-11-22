@@ -2,10 +2,10 @@
   box-sizing: border-box;
 }
 :root {
-  --paper: #f5f5f5;
-  --ink: #171717;
-  --muted: #626262;
-  --rule: #d7d7d7;
+  --paper: white;
+  --ink: black;
+  --muted: rgb(0 0 0 / 62%);
+  --rule: rgb(0 0 0 / 16%);
   --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   color-scheme: light;
   color: var(--ink);
@@ -18,7 +18,7 @@
     'PingFang SC',
     'Microsoft YaHei',
     sans-serif;
-  accent-color: #222;
+  accent-color: black;
 }
 body {
   margin: 0;
@@ -47,7 +47,7 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid #888;
+  outline: 2px solid rgb(0 0 0 / 47%);
   outline-offset: 3px;
 }
 button {
@@ -69,7 +69,7 @@ i[data-icon] svg {
   margin-inline: auto;
 }
 .header {
-  background: #fff;
+  background: white;
   border-bottom: 1px solid var(--rule);
 }
 .mast,
@@ -121,7 +121,7 @@ footer {
   padding-left: 15px;
   font-size: 14px;
   letter-spacing: 0.05em;
-  color: #545454;
+  color: rgb(0 0 0 / 67%);
 }
 .links {
   margin-left: auto;
@@ -132,7 +132,7 @@ footer {
   gap: 6px;
   font-size: 13px;
   text-decoration: none;
-  color: #4c4c4c;
+  color: rgb(0 0 0 / 70%);
   padding: 6px 1px;
 }
 .links a:hover,
@@ -160,13 +160,13 @@ main {
   border-radius: 5px;
   font-size: 14px;
   font-weight: 550;
-  color: #595959;
+  color: rgb(0 0 0 / 65%);
 }
 #algorithms button:hover {
-  background: #e8e8e8;
+  background: rgb(0 0 0 / 9%);
 }
 #algorithms button[aria-pressed='true'] {
-  background: #222;
+  background: black;
   color: white;
 }
 .intro {
@@ -191,7 +191,7 @@ h1 {
     italic 23px/1.1 Georgia,
     'Times New Roman',
     serif;
-  color: #666;
+  color: rgb(0 0 0 / 60%);
 }
 .intro p {
   margin: 8px 0 0;
@@ -206,18 +206,18 @@ h1 {
 .inputs label {
   gap: 8px;
   font-size: 13px;
-  color: #555;
+  color: rgb(0 0 0 / 67%);
 }
 .inputs input {
   width: 62px;
-  border: 1px solid #c6c6c6;
+  border: 1px solid rgb(0 0 0 / 22%);
   border-radius: 4px;
   padding: 7px;
   background: white;
   font: 500 14px var(--mono);
 }
 .outline {
-  border: 1px solid #bdbdbd;
+  border: 1px solid rgb(0 0 0 / 26%);
   background: white;
   border-radius: 4px;
   padding: 8px 12px;
@@ -227,7 +227,7 @@ h1 {
 .outline:hover,
 .step:hover:enabled,
 .icon-btn:hover:enabled {
-  background: #e9e9e9;
+  background: rgb(0 0 0 / 9%);
 }
 .board {
   display: grid;
@@ -238,7 +238,7 @@ h1 {
 .viewer,
 .inspector {
   min-width: 0;
-  border: 1px solid #cfcfcf;
+  border: 1px solid rgb(0 0 0 / 19%);
   border-radius: 8px;
   background: white;
   overflow: hidden;
@@ -251,8 +251,8 @@ h1 {
   display: flex;
   flex: 1;
   flex-direction: column;
-  min-height: clamp(295px, 43vh, 510px);
-  background: #181818;
+  min-height: clamp(295px, 47vh, 530px);
+  background: black;
   color: white;
   isolation: isolate;
 }
@@ -265,7 +265,7 @@ h1 {
   gap: 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #eee;
+  color: rgb(255 255 255 / 93%);
 }
 .graph-title svg {
   width: 16px;
@@ -273,19 +273,49 @@ h1 {
 }
 .angle {
   padding: 2px;
-  border: 1px solid #4c4c4c;
+  border: 1px solid rgb(255 255 255 / 30%);
   border-radius: 4px;
-  background: #202020;
+  background: black;
 }
 .angle button {
-  color: #b1b1b1;
+  color: rgb(255 255 255 / 69%);
   padding: 3px 9px;
   border-radius: 2px;
   font-size: 12px;
 }
 .angle button[aria-pressed='true'] {
-  color: #161616;
-  background: #e7e7e7;
+  color: black;
+  background: white;
+}
+.graph-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#flow {
+  font-size: 12px;
+  line-height: 1;
+  padding: 7px 9px;
+  border: 1px solid rgb(255 255 255 / 40%);
+  border-radius: 4px;
+  color: white;
+}
+#flow::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border: 1px solid white;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: 2px;
+}
+#flow[aria-pressed='true']::before {
+  background: white;
+}
+::selection {
+  background: black;
+  color: white;
 }
 .plot {
   position: relative;
@@ -307,7 +337,7 @@ h1 {
 .plot-foot {
   justify-content: space-between;
   font-size: 11px;
-  color: #bdbdbd;
+  color: rgb(255 255 255 / 74%);
   padding: 2px 19px 14px;
   gap: 9px;
 }
@@ -318,15 +348,15 @@ h1 {
   width: 7px;
   height: 7px;
   display: inline-block;
-  background: #777;
+  background: rgb(255 255 255 / 47%);
   border-radius: 50%;
 }
 .dot:not(:first-child) {
   margin-left: 10px;
 }
 .dot.active {
-  background: #fff;
-  outline: 1px solid #fff;
+  background: white;
+  outline: 1px solid white;
   outline-offset: 2px;
   width: 5px;
   height: 5px;
@@ -337,7 +367,7 @@ h1 {
 .scrubber {
   gap: 12px;
   font-size: 12px;
-  color: #626262;
+  color: rgb(0 0 0 / 62%);
 }
 .scrubber input {
   --fill: 0%;
@@ -352,24 +382,24 @@ h1 {
 }
 .scrubber input::-webkit-slider-runnable-track {
   height: 3px;
-  background: linear-gradient(to right, #262626 var(--fill), #d9d9d9 var(--fill));
+  background: linear-gradient(to right, black var(--fill), rgb(0 0 0 / 15%) var(--fill));
   border-radius: 2px;
 }
 .scrubber input::-moz-range-track {
   height: 3px;
-  background: #ccc;
+  background: rgb(0 0 0 / 20%);
 }
 .scrubber input::-webkit-slider-thumb {
   appearance: none;
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #252525;
+  background: black;
   margin-top: -3.5px;
 }
 .scrubber output {
   font: 12px var(--mono);
-  color: #333;
+  color: rgb(0 0 0 / 80%);
   white-space: nowrap;
 }
 .controls {
@@ -378,8 +408,8 @@ h1 {
 }
 .primary {
   border-radius: 4px;
-  background: #1c1c1c;
-  color: #fff;
+  background: black;
+  color: white;
   min-width: 91px;
   justify-content: center;
   padding: 10px 14px;
@@ -388,7 +418,7 @@ h1 {
   font-weight: 650;
 }
 .primary:hover {
-  background: #363636;
+  background: rgb(0 0 0 / 79%);
 }
 .primary svg {
   width: 14px !important;
@@ -412,14 +442,14 @@ h1 {
   margin-left: auto;
   gap: 6px;
   font-size: 12px;
-  color: #666;
+  color: rgb(0 0 0 / 60%);
 }
 .rate select {
   font: 13px var(--mono);
   padding: 5px 19px 5px 6px;
-  border: 1px solid #ccc;
+  border: 1px solid rgb(0 0 0 / 20%);
   border-radius: 4px;
-  background: #f8f8f8;
+  background: rgb(0 0 0 / 3%);
   cursor: pointer;
 }
 .inspector {
@@ -444,7 +474,7 @@ h2 {
 #step-no {
   font: 11px var(--mono);
   letter-spacing: 0.07em;
-  color: #737373;
+  color: rgb(0 0 0 / 55%);
 }
 .step-info {
   padding-top: 14px;
@@ -452,11 +482,11 @@ h2 {
 .phase {
   gap: 8px;
   font-size: 12px;
-  color: #555;
+  color: rgb(0 0 0 / 67%);
 }
 .phase #action {
   padding: 2px 7px;
-  background: #202020;
+  background: black;
   color: white;
   border-radius: 3px;
   font-weight: 600;
@@ -468,7 +498,7 @@ h2 {
 }
 #note {
   margin: 0;
-  color: #393939;
+  color: rgb(0 0 0 / 78%);
   font-size: 16px;
   line-height: 1.65;
 }
@@ -484,14 +514,14 @@ h2 {
   align-items: center;
   justify-content: space-between;
   gap: 5px;
-  border: 1px solid #dedede;
+  border: 1px solid rgb(0 0 0 / 13%);
   border-radius: 3px;
   padding: 6px 7px;
-  background: #fafafa;
+  background: rgb(0 0 0 / 2%);
 }
 .operand span {
   font-size: 11px;
-  color: #606060;
+  color: rgb(0 0 0 / 62%);
 }
 .operand b {
   font: 600 13px var(--mono);
@@ -524,13 +554,13 @@ h2 {
   min-width: max-content;
 }
 .source li span {
-  color: #969696;
+  color: rgb(0 0 0 / 41%);
   font-size: 10px;
 }
 .source li.current {
-  border-color: #1c1c1c;
-  color: #111;
-  background: #e9e9e9;
+  border-color: black;
+  color: black;
+  background: rgb(0 0 0 / 9%);
   font-weight: 650;
 }
 .snapshot {
@@ -553,16 +583,16 @@ h2 {
     italic 17px Georgia,
     serif;
   margin-left: 3px;
-  color: #676767;
+  color: rgb(0 0 0 / 60%);
 }
 .metrics {
   gap: 19px;
   font-size: 12px;
-  color: #666;
+  color: rgb(0 0 0 / 60%);
 }
 .metrics b {
   font: 600 13px var(--mono);
-  color: #111;
+  color: black;
 }
 .array-scroll {
   overflow-x: auto;
@@ -579,8 +609,8 @@ h2 {
   flex: 1;
   min-width: 40px;
   padding: 5px 2px 6px;
-  background: #f0f0f0;
-  color: #222;
+  background: rgb(0 0 0 / 6%);
+  color: black;
   border: 1px solid transparent;
   border-radius: 3px;
   display: grid;
@@ -592,36 +622,36 @@ h2 {
 }
 #cells button small {
   font: 10px var(--mono);
-  color: #626262;
+  color: rgb(0 0 0 / 62%);
 }
 #cells button.on {
-  background: #252525;
-  color: #fff;
+  background: black;
+  color: white;
 }
 #cells button.on small {
-  color: #d7d7d7;
+  color: rgb(255 255 255 / 84%);
 }
 #cells button.picked {
-  border-color: #171717;
-  box-shadow: 0 0 0 1px #777;
+  border-color: black;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 53%);
 }
 footer {
   justify-content: space-between;
   gap: 10px;
-  color: #696969;
+  color: rgb(0 0 0 / 59%);
   font-size: 12px;
   margin: 13px 1px 0;
 }
 dialog {
-  border: 1px solid #bbb;
+  border: 1px solid rgb(0 0 0 / 27%);
   border-radius: 8px;
   width: min(405px, 92vw);
   padding: 22px;
   background: white;
-  color: #181818;
+  color: black;
 }
 dialog::backdrop {
-  background: #151515a1;
+  background: rgb(0 0 0 / 63%);
 }
 .dialog-head,
 dialog dl div {
@@ -642,10 +672,10 @@ dialog p {
 }
 kbd {
   font: 12px var(--mono);
-  background: #eee;
+  background: rgb(0 0 0 / 7%);
   padding: 3px 6px;
   border-radius: 3px;
-  border: 1px solid #ccc;
+  border: 1px solid rgb(0 0 0 / 20%);
 }
 @media (min-width: 1550px) {
   main {

@@ -104,7 +104,7 @@ nodes.cells.addEventListener('click', (event) => {
   if (cell) selectIndex(Number(cell.dataset.index));
 });
 
-function render(motion) {
+function render(motion, arrived) {
   const { state, length } = score,
     { position, event } = state,
     scope = event?.scope;
@@ -139,7 +139,17 @@ function render(motion) {
   nodes.prev.disabled = nodes.first.disabled = position === 0;
   nodes.next.disabled = nodes.last.disabled = position === length;
   const pivot = algorithm === 'quick' && event ? (event.line === 4 ? event.i : scope.hi) : null;
-  plot.show({ values: chartValues(algorithm, state), max: input.length, event, pivot }, motion);
+  plot.show(
+    {
+      values: chartValues(algorithm, state),
+      max: input.length,
+      event,
+      pivot,
+      finished: position === length,
+    },
+    motion,
+    arrived,
+  );
   updateCells();
   updatePlotSource();
   updatePlay();
@@ -150,22 +160,23 @@ function go(target, animated = true) {
     previous = score.state.event;
   const { position, event } = score.seek(target);
   const change = before < position ? event : previous;
-  const moving =
+  const forward = position > before;
+  const animateMutation =
     animated &&
     Math.abs(before - position) === 1 &&
-    change &&
-    change.kind !== 'compare' &&
-    !viewingBuffer();
-  const motion = moving
+    (change?.kind === 'swap' || (change?.kind === 'write' && forward));
+  const motion = animateMutation
     ? {
         kind: change.kind,
         i: change.i,
         j: change.j,
-        from: before < position ? change.previous : change.value,
+        source: change.source,
+        from: change.previous,
+        duration: running ? Math.min(0.69, 0.76 / Number(nodes.speed.value)) : 0.69,
       }
     : null;
   if (position === score.length) stop();
-  render(motion);
+  render(motion, animated && position === before + 1);
 }
 function updatePlay() {
   const text = running ? '暂停' : score.state.position === score.length ? '重播' : '播放';
@@ -266,14 +277,24 @@ nodes.timeline.addEventListener('input', () => manual(Number(nodes.timeline.valu
 nodes.speed.addEventListener('change', schedule);
 document.querySelectorAll('[data-view]').forEach((button) =>
   button.addEventListener('click', () => {
-    plot.front = button.dataset.view === 'front';
+    plot.setView(button.dataset.view === 'front');
     document
       .querySelectorAll('[data-view]')
       .forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
-    byId('graph-name').textContent = plot.front ? '正视点阵' : '三维点阵';
-    plot.draw(performance.now());
+    byId('graph-name').textContent = plot.front ? '正视粒子' : '三维粒子';
   }),
 );
+const flowButton = byId('flow');
+function updateFlowButton() {
+  flowButton.setAttribute('aria-pressed', String(plot.flow));
+  flowButton.textContent = plot.flow ? '粒子流动' : '粒子静止';
+}
+flowButton.addEventListener('click', () => {
+  plot.setFlow(!plot.flow);
+  updateFlowButton();
+});
+plot.onFlowChange = updateFlowButton;
+updateFlowButton();
 byId('help').addEventListener('click', () => {
   stop();
   nodes.dialog.showModal();

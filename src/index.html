@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="theme-color" content="#f5f5f5" />
+    <meta name="theme-color" content="#ffffff" />
     <meta
       name="description"
-      content="通过灰阶三维点阵、数组快照和逐行伪代码，观察七种排序算法的每一步。"
+      content="通过黑白三维粒子、数组快照和逐行伪代码，观察七种排序算法的每一步。"
     />
     <title>排序观察室 · Sort Lab</title>
     <link rel="icon" href="./images/mark.svg" type="image/svg+xml" />
@@ -52,15 +52,23 @@
           <div class="graph">
             <div class="graph-head">
               <span class="graph-title"
-                ><i data-icon="cube"></i><span id="graph-name">三维点阵</span></span
+                ><i data-icon="cube"></i><span id="graph-name">三维粒子</span></span
               >
-              <div class="angle" aria-label="图表视角">
-                <button data-view="3d" aria-pressed="true">立体</button
-                ><button data-view="front" aria-pressed="false">正视</button>
+              <div class="graph-tools">
+                <button type="button" id="flow" aria-pressed="true" title="切换粒子流动与静止">
+                  粒子流动
+                </button>
+                <div class="angle" aria-label="图表视角">
+                  <button data-view="3d" aria-pressed="true">立体</button
+                  ><button data-view="front" aria-pressed="false">正视</button>
+                </div>
               </div>
             </div>
             <div class="plot">
-              <canvas id="plot" aria-label="排序点阵柱状图，柱高为数值，横轴为从零开始的下标。"></canvas>
+              <canvas
+                id="plot"
+                aria-label="黑白粒子排序柱状图，柱高为数值，横轴为从零开始的下标。"
+              ></canvas>
             </div>
             <div class="plot-foot">
               <span class="legend"><i class="dot active"></i>当前操作<i class="dot"></i>其余元素</span
