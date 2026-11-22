@@ -1,508 +1,226 @@
-// import '../styles/normalize.scss';
-import '../styles/style.scss';
-import './sort';
-import './test';
+import { buildScore } from './sort.js';
+import { worlds } from './worlds.js';
+import { iconsIn, icon } from './icons.js';
+import { Stage } from './stage.js';
+import { Soundtrack } from './audio.js';
 
-window.onload = function () {
-  function RandClass() {
-    // this.name = 'Rand class';
+const $ = id => document.getElementById(id);
+const reducedMedia = window.matchMedia('(prefers-reduced-motion: reduce)');
+const guide = $('guide');
+const stage = new Stage($('visual'), worlds[0], reducedMedia.matches);
+const audio = new Soundtrack(worlds[0]);
+let worldIndex = 0, score, sample, max;
+let playing = false, endAt = 0, previousTime = 0, fractionalSteps = 0;
+let beatPhase = 0, lastTick = -1, lastDraw = -10000, drawNeeded = true;
+let resumeOnVisibility = false;
+let visible = true;
+function generate(n) {
+  const values = Array.from({length:n}, (_, i) => i + 1);
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [values[i], values[j]] = [values[j], values[i]];
   }
-
-  RandClass.prototype = {
-    randBetween(min, max) {
-      if (typeof min === 'undefined') min = 0;
-      if (typeof max === 'undefined') max = 100;
-      return min + Math.floor(Math.random() * (max - min));
-    },
-    randArr(N, min, max) {
-      if (typeof N === 'undefined') N = 15;
-      if (typeof min === 'undefined') min = 0;
-      if (typeof max === 'undefined') max = 100;
-      const arr = [];
-      for (let i = 0; i < N; i++) {
-        arr.push(this.randBetween(min, max));
-      }
-      return arr;
-    },
-  };
-
-  function DrawClass(canvasElem, settings) {
-    if (canvasElem.tagName.toUpperCase() !== 'CANVAS') {
-      console.log('错误的canvas元素');
-      return;
+  return values;
+}
+function ui() {
+  const { position, comparisons, writes } = score.state;
+  const ended = position === score.length;
+  $('timeline').value = position;
+  $('timeline').style.setProperty('--fill', (100 * position / score.length) + '%');
+  $('progress-count').textContent = position.toLocaleString() + ' / ' + score.length.toLocaleString();
+  $('compares').textContent = String(comparisons).padStart(4, '0');
+  $('writes').textContent = String(writes).padStart(4, '0');
+  $('first').disabled = $('prev').disabled = !position;
+  $('last').disabled = $('next').disabled = ended;
+  const label = playing ? '暂停演出' : ended ? '再次演出' : position ? '继续演出' : '开始演出';
+  if ($('play').lastElementChild.textContent !== label) {
+    $('play').innerHTML = '<i data-icon>' + icon(playing ? 'pause' : 'play') + '</i><span>' + label + '</span>';
+  }
+  const status = playing ? '演出中' : ended ? '已完成' : position ? '已暂停' : '就绪';
+  if ($('status').textContent !== status) $('status').textContent = status;
+  $('instrument').classList.toggle('is-playing', playing);
+  drawNeeded = true;
+}
+function pause() {
+  playing = false;
+  endAt = 0;
+  audio.stop();
+}
+function reset(randomize) {
+  pause();
+  if (randomize) sample = generate(Number($('samples').value));
+  max = Math.max(...sample);
+  score = buildScore(sample, $('algorithm').value);
+  $('timeline').max = score.length;
+  stage.clear();
+  ui();
+}
+function start() {
+  if (score.state.position === score.length) score.seek(0);
+  playing = true;
+  endAt = fractionalSteps = beatPhase = 0;
+  lastTick = -1;
+  previousTime = performance.now();
+  stage.clear();
+  audio.start();
+  ui();
+}
+function toggle() {
+  if (playing) { pause(); ui(); } else start();
+}
+function act(time, single = false) {
+  const { event, data } = score.state;
+  if (!event) return;
+  stage.react(event, data, max, time);
+  audio.note(data[event.i] / max, event.i / Math.max(1, data.length - 1), event.kind, lastTick, single);
+}
+function scrub(index, audition = false) {
+  pause(); stage.clear();
+  score.seek(index);
+  if (audition && score.state.event) { audio.unlock(); act(performance.now(), true); }
+  ui();
+}
+function selectWorld(index) {
+  worldIndex = index;
+  const w = worlds[index];
+  document.documentElement.style.setProperty('--accent', w.accent);
+  for (const image of $('backdrop').children) image.style.opacity = Number(image.dataset.world == index);
+  $('scene-number').textContent = 'SCENE 0' + (index + 1);
+  $('scene-name').textContent = w.name;
+  $('scene-english').textContent = w.english;
+  $('stage-bpm').textContent = w.bpm;
+  for (const button of $('world-list').children) button.setAttribute('aria-pressed', button.dataset.world == index);
+  stage.setWorld(w);
+  audio.setWorld(w);
+  beatPhase = 0; lastTick = -1;
+  drawNeeded = true;
+}
+function soundSwitch() {
+  audio.enabled = !audio.enabled;
+  if (audio.enabled) audio.unlock();
+  audio.level(playing);
+  $('audio').setAttribute('aria-pressed', audio.enabled);
+  $('audio').innerHTML = '<i data-icon>' + icon(audio.enabled ? 'volume' : 'mute') + '</i><span>声音' + (audio.enabled ? '开启' : '关闭') + '</span>';
+}
+function setImmersiveUI() {
+  const el = $('instrument');
+  const on = el.classList.contains('fallback-full') || document.fullscreenElement === el;
+  const title = on ? '退出沉浸模式' : '进入沉浸模式';
+  $('immersive').innerHTML = '<i data-icon>' + icon(on ? 'collapse' : 'expand') + '</i>';
+  $('immersive').title = title + ' (F)';
+  $('immersive').setAttribute('aria-label', title);
+}
+async function immersive() {
+  const el = $('instrument');
+  if (el.classList.contains('fallback-full')) el.classList.remove('fallback-full');
+  else if (document.fullscreenElement) await document.exitFullscreen();
+  else {
+    try { await el.requestFullscreen(); }
+    catch { el.classList.add('fallback-full'); }
+  }
+  setImmersiveUI();
+}
+function loop(time) {
+  requestAnimationFrame(loop);
+  if (document.hidden || (!visible && !playing && !endAt)) { previousTime = time; return; }
+  const dt = Math.max(0, Math.min(100, time - previousTime));
+  previousTime = time;
+  if (playing) {
+    const bpm = worlds[worldIndex].bpm;
+    beatPhase += dt * bpm / 15000;
+    const tick = Math.floor(beatPhase);
+    if (tick !== lastTick) {
+      lastTick = tick;
+      audio.beat(tick, score.state.position / score.length);
+      if (tick % 4 === 0) stage.downbeat(time);
     }
-    if (typeof settings === 'undefined') {
-      settings = {};
+    // Large samples group operations into one display frame without dropping history.
+    const baseRate = Math.max(8 * bpm / 60, score.length / 80);
+    fractionalSteps += dt / 1000 * baseRate * Number($('speed').value);
+    const steps = Math.floor(fractionalSteps);
+    if (steps) {
+      fractionalSteps -= steps;
+      const before = score.state.position / score.length;
+      score.seek(score.state.position + steps);
+      act(time);
+      const after = score.state.position / score.length;
+      if (Math.floor(before * 4) < Math.floor(after * 4)) stage.surge(time);
+      if (score.state.position === score.length) {
+        playing = false;
+        audio.active = false;
+        endAt = time;
+        stage.finish(time, score.state.data, max);
+        audio.finish();
+      }
+      ui();
     }
-    this.canvasElem = canvasElem;
-    this.ctx = canvasElem.getContext('2d');
-    this.width = canvasElem.width;
-    this.height = canvasElem.height;
-    this.color = 'rgba(255,0,0,0.3)';
-    this.highlightColor = 'rgba(0,0,0,0.9)';
-    this.ctx.fillStyle = this.color;
-    // this.ctx.fillStyle = 'rgba(255,0,0,0.3)';
-  }
-  DrawClass.prototype = {
-    plotFrame(frameData) {
-      if (typeof frameData === 'undefined') {
-        console.log(`没有frameData数据, curFrame = ${curFrame}`);
-        return;
-      }
-      this.ctx.clearRect(0, 0, this.width, this.height);
-      const widthStep = Math.floor(this.width / frameData.data.length);
-      const columnRatio = 0.618;
-      const heightRatio = 0.8;
-      const max = Math.max.apply(null, frameData.data);
-      // console.log('width=%d widthStep=%d length=%d', this.width, widthStep, frameData.data.length);
-      for (let i = 0; i < frameData.data.length; i++) {
-        const value = frameData.data[i];
-        this.ctx.moveTo(i * widthStep, 0);
-        const rectWidth = Math.max(1, Math.floor(columnRatio * widthStep));
-        const rectHeight = Math.max(1, Math.floor(heightRatio * this.height * value / max));
-        const offset = Math.floor((this.width - widthStep * frameData.data.length) / 2);
-        if (frameData.highlight.indexOf(i) !== -1) {
-          // 应高亮
-          this.ctx.fillStyle = this.highlightColor;
-          this.ctx.fillRect(offset + i * widthStep,
-            this.height - rectHeight,
-            rectWidth,
-            rectHeight);
-          this.ctx.fillStyle = this.color;
-        } else {
-          // var lightness = (1 - value / max) * 100 + '%';
-          // var hue = (value / max) * 270;
-          // this.ctx.fillStyle = 'hsl(' + hue + ',50%,50%)';
-          // console.log('hsl(10,100%,' + lightness + ')');
-          // console.log('hsl(' + hue + ',100%,80%)');
-          // console.log(this.ctx.fillStyle);
-          // this.fillStyle = 'hsl(150,20%,80%)';
-          // this.fillStyle = 'hsl(150,20%,80%)';
-          this.ctx.fillRect(offset + i * widthStep,
-            this.height - rectHeight,
-            rectWidth,
-            rectHeight);
-        }
-      }
-      oCurFrame.innerHTML = `当前步数:${curFrame}`;
-    },
-    plotHist(histArr, t, startIndex) {
-      if (typeof startIndex === 'undefined') {
-        startIndex = 0;
-      }
-      clearInterval(timer);
-      curFrame = startIndex;
-      if (typeof t === 'undefined') t = 300;
-      const me = this;
-      timer = setInterval(() => {
-        me.plotFrame(histArr[curFrame]);
-        curFrame++;
-        if (curFrame >= histArr.length) {
-          clearInterval(timer);
-        }
-      }, t);
-    },
-  };
-
-  function SortClass() { }
-  SortClass.prototype = {
-    bubbleSort(arr, histArr) {
-      // histArr = [];
-      const len = arr.length;
-      for (let i = 0; i < len; i++) {
-        let isSwap = false;
-        for (let j = 0; j < len - 1 - i; j++) {
-          if (arr[j] > arr[j + 1]) {
-            const temp = arr[j];
-            arr[j] = arr[j + 1];
-            arr[j + 1] = temp;
-            isSwap = true;
-            const hist = {
-              data: arr.slice(),
-              highlight: [j, j + 1],
-            };
-            histArr.push(hist);
-          }
-        }
-        if (!isSwap) {
-          return arr;
-        }
-      }
-      return arr;
-    },
-    quickSort(arr, histArr) {
-      // histArr = [];
-      function swap(arr, i, j) {
-        if (i === j) return;
-        const temp = arr[i];
-        arr[i] = arr[j];
-        arr[j] = temp;
-        // console.log(arr);
-      }
-
-      function partition(arr, lo, hi) {
-        const pivot = arr[hi];
-        let keyIndex = lo;
-        for (let i = lo; i < hi; i++) {
-          if (arr[i] < pivot) {
-            swap(arr, i, keyIndex);
-            //
-            var hist = {
-              data: arr.slice(),
-              highlight: [i, keyIndex, hi],
-            };
-            histArr.push(hist);
-            keyIndex++;
-          }
-        }
-        swap(arr, keyIndex, hi);
-        var hist = {
-          data: arr.slice(),
-          highlight: [keyIndex, hi],
-        };
-        histArr.push(hist);
-        // keyIndex++;
-        return keyIndex;
-      }
-
-      function sort(arr, lo, hi) {
-        if (lo >= hi) {
-          return;
-        }
-        const mid = partition(arr, lo, hi);
-        sort(arr, lo, mid - 1);
-        sort(arr, mid + 1, hi);
-      }
-      sort(arr, 0, arr.length - 1);
-    },
-    mergeSort(arr, histArr) {
-      // histArr = [];
-      const shadowArr = new Array(arr.length);
-      // function swap(arr, i, j) {
-      //     var temp = arr[i];
-      //     arr[i] = arr[j];
-      //     arr[j] = temp;
-      // }
-      function merge(arr, lo, mid, hi) {
-        // 将arr分成 [lo,mid] [mid+1,hi]两部分来合并
-        for (var i = lo; i <= hi; i++) {
-          shadowArr[i] = arr[i];
-        }
-        let left = lo,
-          right = mid + 1;
-        for (var i = lo; i <= hi; i++) {
-          if (left > mid) arr[i] = shadowArr[right++];
-          else if (right > hi) arr[i] = shadowArr[left++];
-          else if (shadowArr[left] > shadowArr[right]) arr[i] = shadowArr[right++];
-          else {
-            arr[i] = shadowArr[left++];
-          }
-          const hist = {
-            data: arr.slice(),
-            highlight: [left, right, i],
-          };
-          histArr.push(hist);
-        }
-      }
-
-      function sort(arr, lo, hi) {
-        if (lo >= hi) return;
-        const mid = Math.floor((lo + hi) / 2);
-        sort(arr, lo, mid);
-        sort(arr, mid + 1, hi);
-        merge(arr, lo, mid, hi);
-      }
-      sort(arr, 0, arr.length - 1);
-      return arr;
-    },
-    heapSort(arr, histArr) {
-      // histArr = [];
-      arr.unshift('-');
-
-      function swap(arr, i, j) {
-        const temp = arr[i];
-        arr[i] = arr[j];
-        arr[j] = temp;
-        const arrCopy = arr.slice();
-        arrCopy.shift();
-        const hist = {
-          data: arrCopy,
-          highlight: [i - 1, j - 1],
-        };
-        histArr.push(hist);
-      }
-
-      function sink(arr, index, maxIndex) {
-        while (index * 2 <= maxIndex) {
-          let maxSonIndex = index * 2;
-          if (maxSonIndex < maxIndex) {
-            if (arr[maxSonIndex] < arr[maxSonIndex + 1]) {
-              maxSonIndex++;
-            }
-          }
-          if (arr[index] < arr[maxSonIndex]) {
-            swap(arr, index, maxSonIndex);
-            index = maxSonIndex;
-          } else {
-            break;
-          }
-        }
-      }
-      // 构造一个堆
-      // 从数组的中间开始,往index = 1处移动,每个都做下沉操作
-      const len = arr.length;
-      const startIndex = Math.floor((len - 1) / 2);
-      for (var i = startIndex; i >= 1; i--) {
-        sink(arr, i, len - 1);
-      }
-      // 取出堆顶(最大值),跟数组最后一个位置进行交换
-      // 将交换后的堆顶元素下沉到合适的位置
-      for (var i = len - 1; i > 1; i--) {
-        swap(arr, 1, i);
-        sink(arr, 1, i - 1);
-      }
-      arr.shift();
-      return arr;
-    },
-    selectSort(arr, histArr) {
-      function swap(arr, i, j) {
-        const temp = arr[i];
-        arr[i] = arr[j];
-        arr[j] = temp;
-        const hist = {
-          data: arr.slice(),
-          highlight: [i, j],
-        };
-        histArr.push(hist);
-      }
-
-      function findMaxIndex(arr, lo, hi) {
-        let max = arr[lo],
-          maxIndex = lo;
-        for (let i = lo + 1; i <= hi; i++) {
-          const hist = {
-            data: arr.slice(),
-            highlight: [i, maxIndex],
-          };
-          histArr.push(hist);
-          if (arr[i] > max) {
-            max = arr[i];
-            maxIndex = i;
-          }
-        }
-        return maxIndex;
-      }
-      const len = arr.length;
-      for (let i = len - 1; i >= 0; i--) {
-        // swap(arr, findMaxIndex(arr,0,len-i),len-i)
-        swap(arr, i, findMaxIndex(arr, 0, i));
-      }
-      return arr;
-    },
-    cocktailSort(arr, histArr) {
-      function swap(arr, i, j) {
-        const temp = arr[i];
-        arr[i] = arr[j];
-        arr[j] = temp;
-        const hist = {
-          data: arr.slice(),
-          highlight: [i, j],
-        };
-        histArr.push(hist);
-      }
-
-      function sort(arr) {
-        let lo = 0,
-          hi = arr.length - 1;
-        while (lo < hi) {
-          let isSwap = false;
-          for (let i = lo; i <= hi - 1; i++) {
-            if (arr[i] > arr[i + 1]) {
-              swap(arr, i, i + 1);
-              isSwap = true;
-            }
-          }
-          if (!isSwap) break;
-          hi--;
-          for (let j = hi; j >= lo + 1; j--) {
-            if (arr[j - 1] > arr[j]) {
-              swap(arr, j, j - 1);
-              isSwap = true;
-            }
-          }
-          if (!isSwap) break;
-          lo++;
-        }
-      }
-      sort(arr);
-      return arr;
-    },
-    insertSort(arr, histArr) {
-      function swap(arr, i, j) {
-        const temp = arr[i];
-        arr[i] = arr[j];
-        arr[j] = temp;
-        const hist = {
-          data: arr.slice(),
-          highlight: [j],
-        };
-        histArr.push(hist);
-      }
-      const len = arr.length;
-      for (let i = 1; i < len; i++) {
-        const cur = arr[i];
-        let index = i - 1;
-        while (index >= 0) {
-          if (arr[index] > cur) {
-            swap(arr, index + 1, index);
-          } else {
-            break;
-          }
-          index--;
-        }
-      }
-      return arr;
-      // for (var i = 1; i < len; i++) {
-      //     //从i-1开始向左找,找到第一个比他小的数字(其index是j),或者找到队列的头
-      //     //把arr[i]暂存到temp中
-      //     for (var j = i - 1; j >= 0; j--) {
-      //         //如果找到比当前更小的
-      //         //从把[j+1,i-1]区间,向后移1位
-      //         if (arr[j] < arr[i]) {
-      //             var temp = arr[i];
-      //             for (var k = i - 1; k >= j + 1; k--) {
-      //                 arr[k + 1] = arr[k];
-      //                 var hist = {
-      //                     data: arr.slice(),
-      //                     highlight: [k, k + 1]
-      //                 }
-      //                 histArr.push(hist);
-      //             }
-      //             //把temp放到j+1这个位置
-      //             arr[j + 1] = temp;
-      //             var hist = {
-      //                 data: arr.slice(),
-      //                 highlight: [j + 1]
-      //             }
-      //             histArr.push(hist);
-      //             break;
-      //         }
-      //     }
-      // }
-      // return arr;
-    },
-  };
-  //--------------------------------------------------------------
-  var btnPanel = document.getElementById('btn-panel'),
-    inputN = document.getElementById('sample-num'),
-    inputInterval = document.getElementById('interval'),
-    selectSort = document.getElementById('select-sort'),
-    oCurFrame = document.getElementById('cur-frame');
-  let rand = new RandClass(),
-    draw = new DrawClass(document.getElementById('my-canvas')),
-    sort = new SortClass();
-  // console.log(rand.name);
-  // console.log(rand.randBetween(1, 100));
-  // get settings
-  // gen random arr
-  var sampleArr = [],
-    histArr = [],
-    timer = null,
-    curFrame = 0;
-  initShow();
-  // bind events
-  btnPanel.addEventListener('click', handleBtns, false);
-  selectSort.addEventListener('change', initShow, false);
-  inputN.addEventListener('change', initShow, false);
-
-  function initShow() {
-    clearInterval(timer);
-    sampleArr = rand.randArr(inputN.value, 1, 40);
-    const sortFunc = getSortFuncPointer();
-    histArr = [];
-    sortFunc(sampleArr, histArr);
-    draw.plotFrame(histArr[0]);
-    document.getElementById('btn-pause').value = '暂停动画';
-  }
-
-  function handleBtns(event) {
-    switch (event.target.id) {
-      case 'btn-go':
-        initShow();
-        draw.plotHist(histArr, inputInterval.value, 0);
-        document.getElementById('btn-pause').value = '暂停动画';
-        break;
-      case 'btn-pause':
-        if (event.target.value === '暂停动画') {
-          clearInterval(timer);
-          event.target.value = '继续动画';
-        } else {
-          event.target.value = '暂停动画';
-          draw.plotHist(histArr, inputInterval.value, curFrame);
-        }
-        break;
-      case 'btn-next':
-        clearInterval(timer);
-        document.getElementById('btn-pause').value = '继续动画';
-        curFrame++;
-        if (curFrame >= histArr.length) {
-          curFrame = histArr.length - 1;
-          return;
-        }
-        draw.plotFrame(histArr[curFrame]);
-        // curFrame++;
-        break;
-      case 'btn-prev':
-        clearInterval(timer);
-        document.getElementById('btn-pause').value = '继续动画';
-        curFrame--;
-        if (curFrame < 0) {
-          curFrame = 0;
-          return;
-        }
-        draw.plotFrame(histArr[curFrame]);
-        break;
-      case 'btn-first':
-        document.getElementById('btn-pause').value = '继续动画';
-        clearInterval(timer);
-        curFrame = 0;
-        draw.plotFrame(histArr[0]);
-        break;
-      case 'btn-last':
-        document.getElementById('btn-pause').value = '继续动画';
-        clearInterval(timer);
-        curFrame = histArr.length - 1;
-        draw.plotFrame(histArr[histArr.length - 1]);
-        break;
+  } else if (endAt && time - endAt > 2500) {
+    endAt = 0;
+    if ($('continuous').checked) {
+      selectWorld((worldIndex + 1) % worlds.length);
+      reset(true); start();
     }
-    event.stopPropagation();
   }
+  const idleInterval = stage.reduced ? Infinity : 1000 / 24;
+  if (drawNeeded || stage.dirty || time - lastDraw >= (playing || endAt ? 1000 / 65 : idleInterval)) {
+    if (visible) stage.render(score.state, max, time); lastDraw = time; drawNeeded = false;
+  }
+}
 
-  function getSortFuncPointer() {
-    let func = null;
-    switch (selectSort.value) {
-      case 'quickSort':
-        func = sort.quickSort;
-        break;
-      case 'bubbleSort':
-        func = sort.bubbleSort;
-        break;
-      case 'mergeSort':
-        func = sort.mergeSort;
-        break;
-      case 'heapSort':
-        func = sort.heapSort;
-        break;
-      case 'insertSort':
-        func = sort.insertSort;
-        break;
-      case 'selectSort':
-        func = sort.selectSort;
-        break;
-      case 'cocktailSort':
-        func = sort.cocktailSort;
-        break;
-    }
-    return func;
-  }
+$('world-list').innerHTML = worlds.map((w,i) =>
+  `<button class="world" data-world="${i}" aria-pressed="${i === 0}" aria-label="${w.name}，${w.tone}，${w.bpm} BPM" title="${w.tone}" style="--card-accent:${w.accent}"><img src="./worlds/${w.id}.webp" class="art" alt=""><span class="track-no">TRACK 0${i+1}</span><span class="world-check"><i data-icon="check"></i></span><span class="world-copy"><strong>${w.name}</strong><small>${w.english}</small></span><span class="card-bpm"><i data-icon="music"></i>${w.bpm} BPM</span></button>`
+).join('');
+$('backdrop').innerHTML = worlds.map((w,i) => `<img alt="" data-world="${i}" src="./worlds/${w.id}.webp" style="opacity:${i===0?1:0}">`).join('');
+iconsIn(document);
+$('world-list').addEventListener('click', event => {
+  const button = event.target.closest('button[data-world]');
+  if (button && Number(button.dataset.world) !== worldIndex) { endAt = 0; selectWorld(Number(button.dataset.world)); }
+});
+$('play').onclick = toggle;
+$('shuffle').onclick = () => reset(true);
+$('algorithm').onchange = () => reset(false);
+$('samples').onchange = () => {
+  const n = $('samples').valueAsNumber;
+  $('samples').value = Number.isFinite(n) ? Math.max(2, Math.min(500, Math.round(n))) : sample.length;
+  if (Number($('samples').value) !== sample.length) reset(true);
 };
+$('timeline').oninput = () => scrub(Number($('timeline').value));
+$('first').onclick = () => scrub(0);
+$('prev').onclick = () => scrub(score.state.position - 1, true);
+$('next').onclick = () => scrub(score.state.position + 1, true);
+$('last').onclick = () => scrub(score.length);
+$('audio').onclick = soundSwitch;
+$('immersive').onclick = immersive;
+document.addEventListener('fullscreenchange', setImmersiveUI);
+$('help').onclick = () => { pause(); ui(); guide.showModal(); };
+$('reduced').checked = stage.reduced;
+$('reduced').onchange = () => { stage.reduced = $('reduced').checked; stage.clear(); drawNeeded = true; };
+document.addEventListener('keydown', e => {
+  if (guide.open || e.ctrlKey || e.altKey || e.metaKey || /^(SELECT|INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+  if (e.code === 'Space' && /^(BUTTON|A)$/.test(e.target.tagName)) return;
+  const actions = { Space:toggle, ArrowLeft:() => scrub(score.state.position - 1, true), ArrowRight:() => scrub(score.state.position + 1, true),
+    Home:() => scrub(0), End:() => scrub(score.length), KeyR:() => reset(true), KeyF:immersive, KeyM:soundSwitch,
+    Escape:() => { $('instrument').classList.remove('fallback-full'); setImmersiveUI(); } };
+  if (actions[e.code]) { e.preventDefault(); if (!e.repeat || e.code.startsWith('Arrow')) actions[e.code](); }
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    resumeOnVisibility = playing;
+    if (playing) { playing = false; ui(); }
+    audio.stop();
+  } else if (resumeOnVisibility) {
+    resumeOnVisibility = false;
+    playing = true;
+    audio.start();
+    ui();
+  }
+  previousTime = performance.now();
+});
+new IntersectionObserver(entries => {
+  visible = entries[0].isIntersecting;
+  drawNeeded = true;
+  previousTime = performance.now();
+}).observe($('instrument'));
+
+reset(true);
+requestAnimationFrame(loop);

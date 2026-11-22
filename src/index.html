@@ -1,48 +1,75 @@
-<!DOCTYPE html>
-<html lang="en">
-
+<!doctype html>
+<html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  <title>排序算法可视化</title>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b10">
+  <meta name="description" content="用极光、深海与日冕，听见七种排序算法的节奏。">
+  <title>Sort Effect · 排序共振</title>
+  <link rel="icon" href="./images/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles/style.css">
+  <script defer src="./app.js"></script>
 </head>
-
 <body>
-  <div class="wrapper">
-    <h2>排序算法可视化</h2>
-    <div class="setting">
-      排序算法
-      <select name="sort-func" id="select-sort">
-        <option value="bubbleSort">冒泡排序</option>
-        <option value="quickSort" selected="true">快速排序</option>
-        <option value="mergeSort">归并排序</option>
-        <option value="heapSort">堆排序</option>
-        <option value="insertSort">插入排序</option>
-        <option value="selectSort">简单选择排序</option>
-        <option value="cocktailSort">鸡尾酒排序</option>
-      </select>
-      <label>
-        样本数量
-        <input type="number" value="100" id="sample-num" min="2" max="500" step="1">
-      </label>
-      <label>动画间隔
-        <input type="number" name="" id="interval" value="100" max='9999' step='10'>ms
-      </label>
-      <!-- <br> -->
+  <header class="topbar">
+    <div class="wrap header-inner">
+      <div class="brand"><img src="./images/mark.svg" alt="" width="34" height="34"><span>SORT <b>EFFECT</b></span></div>
+      <span class="brand-sub">排序共振</span>
+      <div class="header-actions">
+        <button id="audio" aria-pressed="true" title="切换声音 (M)"><i data-icon="volume"></i><span>声音开启</span></button>
+        <span class="divider"></span>
+        <button class="icon-button" id="help" title="操作指南" aria-label="操作指南"><i data-icon="keyboard"></i></button>
+        <a class="icon-button" href="https://github.com/holynova/sort_animation" target="_blank" rel="noopener" title="GitHub 源码" aria-label="GitHub 源码"><i data-icon="github"></i></a>
+      </div>
     </div>
-    <div class="btns" id='btn-panel'>
-      <!-- <input type="button" value="重置数据" id='btn-renew-data'> -->
-      <input type="button" value="开始动画" id='btn-go'>
-      <input type="button" value="暂停动画" id='btn-pause'>
-      <input type="button" value="下一步" id='btn-next'>
-      <input type="button" value="上一步" id='btn-prev'>
-      <input type="button" value="第一步" id='btn-first'>
-      <input type="button" value="最后一步" id='btn-last'>
-    </div>
-    <h3 id='cur-frame'></h3>
-    <canvas width="600" height="300" id='my-canvas'></canvas>
-  </div>
-</body>
-
-</html>
+  </header>
+  <main class="wrap">
+    <section class="instrument" id="instrument" aria-label="排序视听舞台">
+      <div class="stage" id="stage">
+        <div class="backdrop" id="backdrop"></div>
+        <div class="shade"></div>
+        <canvas id="visual" aria-label="排序柱状图，柱高表示数值，发光柱表示当前操作"></canvas>
+        <div class="stage-top">
+          <div class="scene-heading">
+            <div class="eyebrow"><span class="scene-line"></span><span id="scene-number">SCENE 01</span><span class="scene-split">/</span>03</div>
+            <h1 id="scene-name">极光脉冲</h1><p id="scene-english">Aurora Pulse</p>
+          </div>
+          <div class="stage-tools"><div class="status" role="status"><span class="status-dot"></span><span id="status">就绪</span></div><button class="immersive icon-button" id="immersive" title="沉浸模式 (F)" aria-label="进入沉浸模式"><i data-icon="expand"></i></button></div>
+        </div>
+        <div class="stage-hud">
+          <div class="readouts"><span>比较 <b id="compares">0000</b></span><span>写入 <b id="writes">0000</b></span></div>
+          <span class="bpm"><i data-icon="wave"></i><b id="stage-bpm">108</b> BPM</span>
+        </div>
+      </div>
+      <div class="transport">
+        <div class="timeline-row"><span class="progress-label"><i data-icon="timeline"></i>演出进度</span><input id="timeline" type="range" min="0" value="0" max="1" aria-label="演出进度"><output for="timeline" id="progress-count">0 / 0</output></div>
+        <div class="desk">
+          <div class="playback">
+            <button class="play-button" id="play"><i data-icon="play"></i><span>开始演出</span></button>
+            <div class="step-buttons">
+              <button class="icon-button" id="first" title="第一步 (Home)" aria-label="第一步"><i data-icon="first"></i></button>
+              <button class="icon-button" id="prev" title="上一步 (←)" aria-label="上一步"><i data-icon="previous"></i></button>
+              <button class="icon-button" id="next" title="下一步 (→)" aria-label="下一步"><i data-icon="next"></i></button>
+              <button class="icon-button" id="last" title="最后一步 (End)" aria-label="最后一步"><i data-icon="last"></i></button>
+            </div>
+            <span class="divider"></span><button id="shuffle" class="shuffle icon-button" title="重新打乱 (R)" aria-label="重新打乱"><i data-icon="shuffle"></i></button>
+          </div>
+          <div class="settings">
+            <label for="algorithm">排序算法<span class="control select-wrap"><i data-icon="algorithm"></i><select id="algorithm">
+              <option value="quick">快速排序</option><option value="merge">归并排序</option><option value="heap">堆排序</option><option value="bubble">冒泡排序</option><option value="insertion">插入排序</option><option value="selection">选择排序</option><option value="cocktail">鸡尾酒排序</option></select><i data-icon="down"></i></span></label>
+            <label for="samples">样本数量<span class="control sample-wrap"><i data-icon="bars"></i><input value="64" min="2" max="500" type="number" id="samples" inputmode="numeric"></span></label>
+            <label for="speed">播放速度<span class="control select-wrap"><i data-icon="speed"></i><select id="speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1.0×</option><option value="2">2.0×</option><option value="4">4.0×</option><option value="8">8.0×</option></select><i data-icon="down"></i></span></label>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="library" aria-labelledby="library-title">
+      <div class="section-heading"><div class="section-title"><i data-icon="layers"></i><h2 id="library-title">场景库</h2><span>SOUND WORLDS</span></div><label class="continuous" title="一场结束后自动进入下一个场景"><input type="checkbox" id="continuous"><span class="switch"></span>连续演出</label></div>
+      <div class="world-grid" id="world-list"></div>
+    </section>
+  </main>
+  <dialog id="guide"><form method="dialog"><div class="dialog-head"><h2>操作指南</h2><button class="icon-button" aria-label="关闭"><i data-icon="close"></i></button></div>
+    <p>柱高表示数值。亮白柱正在比较，彩色光束和粒子标记写入位置。拖动进度条可以回看任意一步。</p>
+    <dl><div><dt>播放 / 暂停</dt><dd><kbd>Space</kbd></dd></div><div><dt>逐步回放</dt><dd><kbd>←</kbd> <kbd>→</kbd></dd></div><div><dt>跳至首尾</dt><dd><kbd>Home</kbd> <kbd>End</kbd></dd></div><div><dt>打乱 / 声音 / 沉浸模式</dt><dd><kbd>R</kbd> <kbd>M</kbd> <kbd>F</kbd></dd></div></dl>
+    <label class="reduced"><input type="checkbox" id="reduced"> 减弱动态效果</label>
+  </form></dialog>
+</body></html>
