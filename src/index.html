@@ -6,20 +6,27 @@
     <meta name="theme-color" content="#ffffff" />
     <meta
       name="description"
-      content="通过黑白三维粒子、数组快照和逐行伪代码，观察七种排序算法的每一步。"
+      content="通过实心柱状图、逐步粒子反馈、数组快照和逐行伪代码，观察七种排序算法的每一步。"
     />
     <title>排序观察室 · Sort Lab</title>
     <link rel="icon" href="./images/mark.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles/style.css" />
     <script defer src="./app.js"></script>
-  <script defer src="https://cloud.umami.is/script.js" data-website-id="e01c9f78-4607-4e60-b01c-77c8190b12b4"></script>
-</head>
+    <script
+      defer
+      src="https://cloud.umami.is/script.js"
+      data-website-id="e01c9f78-4607-4e60-b01c-77c8190b12b4"
+    ></script>
+  </head>
   <body>
     <header class="header">
       <div class="wrap mast">
         <div class="brand"><img src="./images/mark.svg" alt="" />SORT LAB</div>
         <span class="brand-cn">排序观察室</span>
         <div class="links">
+          <button id="sound" type="button" aria-pressed="false" title="音效 · 关" aria-label="音效 · 关">
+            <i data-icon="muted"></i><span>音效 · 关</span>
+          </button>
           <button id="help" title="键盘快捷键" aria-label="键盘快捷键">
             <i data-icon="keyboard"></i><span>快捷键</span></button
           ><a
@@ -53,23 +60,20 @@
           <div class="graph">
             <div class="graph-head">
               <span class="graph-title"
-                ><i data-icon="cube"></i><span id="graph-name">三维粒子</span></span
+                ><i data-icon="cube"></i><span id="graph-name">排序柱状图</span></span
               >
               <div class="graph-tools">
-                <button type="button" id="flow" aria-pressed="true" title="切换粒子流动与静止">
-                  粒子流动
+                <button type="button" id="flow" aria-pressed="true" title="开启或关闭排序操作的粒子特效">
+                  粒子特效 · 开
                 </button>
                 <div class="angle" aria-label="图表视角">
-                  <button data-view="3d" aria-pressed="true">立体</button
-                  ><button data-view="front" aria-pressed="false">正视</button>
+                  <button data-view="front" aria-pressed="true">正视</button
+                  ><button data-view="3d" aria-pressed="false">立体</button>
                 </div>
               </div>
             </div>
             <div class="plot">
-              <canvas
-                id="plot"
-                aria-label="黑白粒子排序柱状图，柱高为数值，横轴为从零开始的下标。"
-              ></canvas>
+              <canvas id="plot" aria-label="黑白实心柱状图，柱高为数值，横轴为从零开始的下标。"></canvas>
             </div>
             <div class="plot-foot">
               <span class="legend"><i class="dot active"></i>当前操作<i class="dot"></i>其余元素</span
@@ -137,7 +141,7 @@
           <div id="cells"></div>
         </div>
       </section>
-      <footer><span id="facts"></span><span>下标从 0 开始 · v3.0.0</span></footer>
+      <footer><span id="facts"></span><span>下标从 0 开始 · v3.1.0-beta.1</span></footer>
     </main>
     <dialog id="dialog">
       <form method="dialog">

@@ -1,6 +1,7 @@
 import { algorithms, buildScore } from './sort.js';
 import { chartValues, explain, lessons } from './lesson.js';
-import { ParticlePlot } from './stage.js';
+import { BarPlot } from './stage.js';
+import { StepSound } from './sound.js';
 import { icon, iconsIn } from './icons.js';
 
 const byId = (id) => document.getElementById(id);
@@ -10,6 +11,17 @@ const el = (tag, text) => {
   return node;
 };
 iconsIn(document);
+const sound = new StepSound();
+const soundButton = byId('sound');
+soundButton.addEventListener('click', async () => {
+  await sound.toggle();
+  soundButton.setAttribute('aria-pressed', String(sound.enabled));
+  const label = sound.enabled ? '音效 · 开' : '音效 · 关';
+  soundButton.setAttribute('aria-label', label);
+  soundButton.title = label;
+  soundButton.lastElementChild.textContent = label;
+  soundButton.firstElementChild.innerHTML = icon(sound.enabled ? 'speaker' : 'muted');
+});
 let input = [8, 3, 11, 5, 1, 9, 4, 12, 2, 7, 10, 6];
 let algorithm = 'bubble',
   score,
@@ -42,7 +54,7 @@ for (const id of [
 ])
   nodes[id] = byId(id);
 
-const plot = new ParticlePlot(byId('plot'), selectIndex, (index) => {
+const plot = new BarPlot(byId('plot'), selectIndex, (index) => {
   hovered = index;
   updatePlotSource();
 });
@@ -104,7 +116,7 @@ nodes.cells.addEventListener('click', (event) => {
   if (cell) selectIndex(Number(cell.dataset.index));
 });
 
-function render(motion, arrived) {
+function render(action) {
   const { state, length } = score,
     { position, event } = state,
     scope = event?.scope;
@@ -139,44 +151,55 @@ function render(motion, arrived) {
   nodes.prev.disabled = nodes.first.disabled = position === 0;
   nodes.next.disabled = nodes.last.disabled = position === length;
   const pivot = algorithm === 'quick' && event ? (event.line === 4 ? event.i : scope.hi) : null;
+  const values = chartValues(algorithm, state);
+  sound.play(action, values, input.length);
   plot.show(
     {
-      values: chartValues(algorithm, state),
+      values,
       max: input.length,
       event,
       pivot,
-      finished: position === length,
     },
-    motion,
-    arrived,
+    action,
   );
   updateCells();
   updatePlotSource();
   updatePlay();
 }
 
-function go(target, animated = true) {
+function go(target, animated = true, celebrate = false) {
   const before = score.state.position,
     previous = score.state.event;
   const { position, event } = score.seek(target);
-  const change = before < position ? event : previous;
   const forward = position > before;
-  const animateMutation =
-    animated &&
-    Math.abs(before - position) === 1 &&
-    (change?.kind === 'swap' || (change?.kind === 'write' && forward));
-  const motion = animateMutation
-    ? {
+  let action = null;
+  if (animated && Math.abs(before - position) === 1) {
+    // Rewind a swap along the same path. Reads and buffer writes on rewind are snapshots.
+    const change = forward ? event : previous?.kind === 'swap' && !viewingBuffer() ? previous : null;
+    if (change) {
+      action = {
         kind: change.kind,
         i: change.i,
         j: change.j,
         source: change.source,
         from: change.previous,
-        duration: running ? Math.min(0.69, 0.76 / Number(nodes.speed.value)) : 0.69,
-      }
-    : null;
+        duration: Math.min(
+          change.kind === 'compare' ? 570 : 750,
+          running ? 790 / Number(nodes.speed.value) : 750,
+        ),
+        lock:
+          change.kind === 'swap' &&
+          (algorithm === 'selection' ||
+            (algorithm === 'quick' && change.line === 4) ||
+            (algorithm === 'heap' && change.line === 1)),
+        finale: forward && position === score.length,
+      };
+    }
+  } else if (celebrate && forward && position === score.length) {
+    action = { kind: 'finish', duration: 960 };
+  }
   if (position === score.length) stop();
-  render(motion, animated && position === before + 1);
+  render(action);
 }
 function updatePlay() {
   const text = running ? '暂停' : score.state.position === score.length ? '重播' : '播放';
@@ -184,6 +207,7 @@ function updatePlay() {
   nodes.play.lastElementChild.textContent = text;
 }
 function stop() {
+  sound.quiet();
   running = false;
   clearTimeout(timer);
   if (score) updatePlay();
@@ -209,9 +233,9 @@ function togglePlay() {
   updatePlay();
   schedule();
 }
-function manual(target, animated = true) {
+function manual(target, animated = true, celebrate = false) {
   stop();
-  go(target, animated);
+  go(target, animated, celebrate);
 }
 
 function loadStudy() {
@@ -272,7 +296,7 @@ nodes.play.addEventListener('click', togglePlay);
 nodes.first.addEventListener('click', () => manual(0, false));
 nodes.prev.addEventListener('click', () => manual(score.state.position - 1));
 nodes.next.addEventListener('click', () => manual(score.state.position + 1));
-nodes.last.addEventListener('click', () => manual(score.length, false));
+nodes.last.addEventListener('click', () => manual(score.length, false, true));
 nodes.timeline.addEventListener('input', () => manual(Number(nodes.timeline.value), false));
 nodes.speed.addEventListener('change', schedule);
 document.querySelectorAll('[data-view]').forEach((button) =>
@@ -281,19 +305,19 @@ document.querySelectorAll('[data-view]').forEach((button) =>
     document
       .querySelectorAll('[data-view]')
       .forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
-    byId('graph-name').textContent = plot.front ? '正视粒子' : '三维粒子';
+    byId('graph-name').textContent = plot.front ? '排序柱状图' : '立体柱状图';
   }),
 );
 const flowButton = byId('flow');
 function updateFlowButton() {
-  flowButton.setAttribute('aria-pressed', String(plot.flow));
-  flowButton.textContent = plot.flow ? '粒子流动' : '粒子静止';
+  flowButton.setAttribute('aria-pressed', String(plot.effectsOn));
+  flowButton.textContent = plot.effectsOn ? '粒子特效 · 开' : '粒子特效 · 关';
 }
 flowButton.addEventListener('click', () => {
-  plot.setFlow(!plot.flow);
+  plot.setEffects(!plot.effectsOn);
   updateFlowButton();
 });
-plot.onFlowChange = updateFlowButton;
+plot.onEffectsChange = updateFlowButton;
 updateFlowButton();
 byId('help').addEventListener('click', () => {
   stop();
@@ -320,7 +344,7 @@ document.addEventListener('keydown', (event) => {
       manual(0, false);
       break;
     case 'End':
-      manual(score.length, false);
+      manual(score.length, false, true);
       break;
     case ' ':
       if (event.target.closest('button,a') || event.repeat) return;

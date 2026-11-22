@@ -1,4 +1,6 @@
 const shapes = {
+  speaker: '<path d="M3 9h4l5-4v14l-5-4H3z M16 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/>',
+  muted: '<path d="M3 9h4l5-4v14l-5-4H3z M16 9l5 6m0-6-5 6"/>',
   keyboard:
     '<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M6 9h.1m4 0h.1m4 0h.1m4 0h.1M6 12h.1m4 0h.1m4 0h.1m4 0h.1M8 15h8"/>',
   github:

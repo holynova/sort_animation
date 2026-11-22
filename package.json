@@ -1,6 +1,6 @@
 {
   "name": "sort-effect",
-  "version": "3.0.0",
+  "version": "3.1.0-beta.1",
   "private": true,
   "description": "A monochrome, step-by-step sorting algorithm visualizer",
   "type": "module",
